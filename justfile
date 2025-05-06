@@ -1,0 +1,27 @@
+_default:
+    @just --list --unsorted --justfile {{justfile()}}
+
+# Run the development server in mprocs
+dev:
+    nix develop --command cargo tauri dev
+
+# Run a development shell
+shell:
+    nix develop
+
+# Execute a single command within the shell
+run *CMD:
+    nix develop --command {{CMD}}
+
+# Run an npm command within frontend
+[working-directory: 'frontend']
+npm *CMD:
+    nix develop --command npm {{CMD}}
+
+# Run a cargo command within backend
+[working-directory: 'backend']
+cargo *CMD:
+    nix develop --command cargo {{CMD}}
+
+
+
