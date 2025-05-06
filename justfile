@@ -5,6 +5,9 @@ _default:
 dev:
     nix develop --command cargo tauri dev
 
+dev-android:
+    nix develop -c cargo tauri android dev
+
 # Run a development shell
 shell:
     nix develop
