@@ -95,13 +95,8 @@ pub struct GameState<Id: PlayerId> {
 }
 
 impl<Id: PlayerId> GameState<Id> {
-    pub fn new(
-        settings: GameSettings,
-        my_id: Id,
-        random_seed: u64,
-        initial_caught_state: HashMap<Id, bool>,
-    ) -> Self {
-        let mut rand = ChaCha20Rng::seed_from_u64(random_seed);
+    pub fn new(settings: GameSettings, my_id: Id, initial_caught_state: HashMap<Id, bool>) -> Self {
+        let mut rand = ChaCha20Rng::seed_from_u64(settings.random_seed);
         let increment = rand.random_range(-100..100);
 
         Self {
@@ -112,13 +107,13 @@ impl<Id: PlayerId> GameState<Id> {
             caught_state: initial_caught_state,
             available_powerup: None,
             powerup_bernoulli: settings.get_powerup_bernoulli(),
+            shared_random_state: settings.random_seed,
             settings,
             last_global_ping: None,
             last_powerup_spawn: None,
             location_history: Vec::with_capacity(30),
             held_powerup: None,
             shared_random_increment: increment,
-            shared_random_state: random_seed,
         }
     }
 

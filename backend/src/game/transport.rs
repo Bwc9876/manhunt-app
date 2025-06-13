@@ -1,6 +1,4 @@
-use futures::{stream::FuturesUnordered, StreamExt};
-
-use super::{events::GameEvent, PlayerId, UtcDT};
+use super::{events::GameEvent, PlayerId};
 
 pub trait Transport<Id: PlayerId> {
     /// Receive an event

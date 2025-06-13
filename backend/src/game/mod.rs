@@ -1,8 +1,10 @@
 use chrono::{DateTime, Utc};
-use events::GameEvent;
+pub use events::GameEvent;
+use matchbox_socket::PeerId;
 use powerups::PowerUpType;
-use settings::GameSettings;
-use std::{collections::HashMap, fmt::Debug, hash::Hash, time::Duration};
+pub use settings::GameSettings;
+use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Deref, sync::Arc, time::Duration};
+use uuid::Uuid;
 
 use tokio::{sync::RwLock, time::MissedTickBehavior};
 
@@ -13,9 +15,9 @@ mod settings;
 mod state;
 mod transport;
 
-use location::LocationService;
+pub use location::{Location, LocationService};
 use state::GameState;
-use transport::Transport;
+pub use transport::Transport;
 
 /// Type used to uniquely identify players in the game
 pub trait PlayerId:
@@ -23,15 +25,18 @@ pub trait PlayerId:
 {
 }
 
+impl PlayerId for Uuid {}
+impl PlayerId for PeerId {}
+
 /// Convenence alias for UTC DT
 pub type UtcDT = DateTime<Utc>;
 
 /// Struct representing an ongoing game, handles communication with
 /// other clients via [Transport], gets location with [LocationService], and provides high-level methods for
 /// taking actions in the game.
-struct Game<Id: PlayerId, L: LocationService, T: Transport<Id>> {
+pub struct Game<Id: PlayerId, L: LocationService, T: Transport<Id>> {
     state: RwLock<GameState<Id>>,
-    transport: T,
+    transport: Arc<T>,
     location: L,
     interval: Duration,
 }
@@ -40,13 +45,12 @@ impl<Id: PlayerId, L: LocationService, T: Transport<Id>> Game<Id, L, T> {
     pub fn new(
         my_id: Id,
         interval: Duration,
-        random_seed: u64,
         initial_caught_state: HashMap<Id, bool>,
         settings: GameSettings,
-        transport: T,
+        transport: Arc<T>,
         location: L,
     ) -> Self {
-        let state = GameState::<Id>::new(settings, my_id, random_seed, initial_caught_state);
+        let state = GameState::<Id>::new(settings, my_id, initial_caught_state);
 
         Self {
             transport,
@@ -139,8 +143,9 @@ impl<Id: PlayerId, L: LocationService, T: Transport<Id>> Game<Id, L, T> {
         let mut state = self.state.write().await;
 
         // Push to location history
-        let location = self.location.get_loc();
-        state.push_loc(location);
+        if let Some(location) = self.location.get_loc() {
+            state.push_loc(location);
+        }
 
         // Release Seekers?
         if !state.seekers_released() && state.should_release_seekers(now) {
@@ -248,12 +253,12 @@ mod tests {
     struct MockLocation;
 
     impl LocationService for MockLocation {
-        fn get_loc(&self) -> location::Location {
-            location::Location {
+        fn get_loc(&self) -> Option<Location> {
+            Some(location::Location {
                 lat: 0.0,
                 long: 0.0,
                 heading: None,
-            }
+            })
         }
     }
 
@@ -295,10 +300,9 @@ mod tests {
                     let game = TestGame::new(
                         id as u32,
                         INTERVAL,
-                        0,
                         initial_caught_state.clone(),
                         settings.clone(),
-                        transport,
+                        Arc::new(transport),
                         location,
                     );
 
@@ -365,6 +369,7 @@ mod tests {
 
     fn mk_settings() -> GameSettings {
         GameSettings {
+            random_seed: 0,
             hiding_time_seconds: 1,
             ping_start: PingStartCondition::Instant,
             ping_minutes_interval: 1,

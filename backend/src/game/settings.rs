@@ -17,6 +17,8 @@ pub enum PingStartCondition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Settings for the game, host is the only person able to change these
 pub struct GameSettings {
+    /// The random seed used for shared rng
+    pub random_seed: u64,
     /// The number of seconds to wait before seekers are allowed to go
     pub hiding_time_seconds: u32,
     /// Condition to wait for global pings to begin
@@ -37,5 +39,20 @@ pub struct GameSettings {
 impl GameSettings {
     pub fn get_powerup_bernoulli(&self) -> Bernoulli {
         Bernoulli::from_ratio(self.powerup_chance, 100).unwrap()
+    }
+}
+
+impl Default for GameSettings {
+    fn default() -> Self {
+        Self {
+            random_seed: rand::random_range(0..=u64::MAX),
+            hiding_time_seconds: 60,
+            ping_start: PingStartCondition::Players(2),
+            ping_minutes_interval: 3,
+            powerup_start: PingStartCondition::Minutes(5),
+            powerup_chance: 25,
+            powerup_minutes_cooldown: 5,
+            powerup_locations: vec![],
+        }
     }
 }

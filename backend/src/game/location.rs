@@ -15,5 +15,5 @@ pub struct Location {
 }
 
 pub trait LocationService {
-    fn get_loc(&self) -> Location;
+    fn get_loc(&self) -> Option<Location>;
 }
