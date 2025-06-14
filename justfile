@@ -26,5 +26,9 @@ npm *CMD:
 cargo *CMD:
     nix develop --command cargo {{CMD}}
 
+# Export types from the backend to TypeScript bindings
+[working-directory: 'backend']
+export-types:
+    nix develop --command cargo run --bin export-types ../frontend/src/bindings.ts
 
 

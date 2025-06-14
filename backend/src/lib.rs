@@ -11,7 +11,6 @@ use lobby::{Lobby, LobbyState, StartGameInfo};
 use location::TauriLocation;
 use profile::PlayerProfile;
 use serde::{Deserialize, Serialize};
-use specta_typescript::Typescript;
 use tauri::{AppHandle, Manager, State};
 use tauri_specta::collect_commands;
 use tokio::sync::RwLock;
@@ -282,11 +281,8 @@ async fn use_powerup(state: State<'_, AppStateHandle>) -> Result<GameState> {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    let state = RwLock::new(AppState::Setup);
-
-    let builder = tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
+pub fn mk_specta() -> tauri_specta::Builder {
+    tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
         start_lobby,
         quit_game_or_lobby,
         get_current_screen,
@@ -298,12 +294,14 @@ pub fn run() {
         mark_caught,
         grab_powerup,
         use_powerup,
-    ]);
+    ])
+}
 
-    #[cfg(debug_assertions)]
-    builder
-        .export(Typescript::default(), "../frontend/src/bindings.ts")
-        .expect("Failed to export typescript bindings");
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let state = RwLock::new(AppState::Setup);
+
+    let builder = mk_specta();
 
     tauri::Builder::default()
         .manage(state)
