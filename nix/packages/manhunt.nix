@@ -1,17 +1,16 @@
-{ lib
-, libsoup_3
-, dbus
-, glib
-, glib-networking
-, librsvg
-, webkitgtk_4_1
-, pkg-config
-, wrapGAppsHook
-, makeDesktopItem
-, copyDesktopItems
-, rustPlatform
-, manhunt-frontend
-,
+{
+  lib,
+  libsoup_3,
+  dbus,
+  glib,
+  glib-networking,
+  librsvg,
+  webkitgtk_4_1,
+  pkg-config,
+  wrapGAppsHook,
+  copyDesktopItems,
+  rustPlatform,
+  manhunt-frontend,
 }:
 rustPlatform.buildRustPackage {
   pname = "manhunt";
@@ -55,6 +54,6 @@ rustPlatform.buildRustPackage {
     mainProgram = "manhunt-app";
     platforms = platforms.linux;
     license = licenses.gpl3;
-    maintainers = with maintainers; [ bwc9876 ];
+    maintainers = with maintainers; [bwc9876];
   };
 }

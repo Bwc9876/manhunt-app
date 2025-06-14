@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
 use manhunt_app_lib::mk_specta;
 use specta_typescript::Typescript;
@@ -10,9 +10,9 @@ pub fn main() {
         .canonicalize()
         .expect("Failed to canonicalize path");
     let specta = mk_specta();
-    specta
-        .export(Typescript::default(), &path)
-        .expect("Failed to export types");
+    let mut lang = Typescript::new();
+    lang.header = Cow::Borrowed("/* eslint @typescript-eslint/no-unused-vars: 0 */\n/* eslint @typescript-eslint/no-explicit-any: 0 */");
+    specta.export(lang, &path).expect("Failed to export types");
     println!(
         "Successfully exported type and commands to {}",
         path.to_str().unwrap()

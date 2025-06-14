@@ -14,19 +14,12 @@
         android_sdk.accept_license = true;
       };
 
-      formatters = let
-        forAllTypes = cmd: types:
-          builtins.listToAttrs (builtins.map
-            (t: {
-              name = "*.${t}";
-              value = cmd;
-            })
-            types);
-      in
-        {
-          "*.rs" = "cd backend; cargo fmt";
-        }
-        // (forAllTypes "prettier --write ." ["ts" "tsx" "md" "json"]);
+      flakelight.builtinFormatters = false;
+      formatters = {
+        "*.nix" = "alejandra .";
+        "*.{js,ts,jsx,tsx,md,json}" = "prettier --write . --config frontend/.prettierrc.yaml";
+      };
+
       devShell = pkgs: let
         buildToolsVersion = "34.0.0";
         androidComposition = pkgs.androidenv.composeAndroidPackages {
@@ -63,6 +56,7 @@
           gdk-pixbuf
           glib
           gtk3
+          alejandra
           harfbuzz
           librsvg
           libsoup_3

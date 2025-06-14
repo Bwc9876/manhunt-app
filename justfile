@@ -29,6 +29,6 @@ cargo *CMD:
 # Export types from the backend to TypeScript bindings
 [working-directory: 'backend']
 export-types:
-    nix develop --command cargo run --bin export-types ../frontend/src/bindings.ts
-
+    nix develop --command cargo run --bin export-types ../frontend/src/bindings.ts 
+    nix develop --command prettier --write ../frontend/src/bindings.ts
 
