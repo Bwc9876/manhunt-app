@@ -14,7 +14,7 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum TransportMessage {
     /// Message related to the actual game
-    Game(GameEvent<Uuid>),
+    Game(GameEvent),
     /// Message related to the pre-game lobby
     Lobby(LobbyMessage),
     /// Internal message when peer connects
@@ -154,8 +154,8 @@ impl MatchboxTransport {
     }
 }
 
-impl Transport<Uuid> for MatchboxTransport {
-    async fn receive_message(&self) -> Option<GameEvent<Uuid>> {
+impl Transport for MatchboxTransport {
+    async fn receive_message(&self) -> Option<GameEvent> {
         self.recv_transport_message()
             .await
             .and_then(|(_, msg)| match msg {
@@ -164,7 +164,7 @@ impl Transport<Uuid> for MatchboxTransport {
             })
     }
 
-    async fn send_message(&self, msg: GameEvent<Uuid>) {
+    async fn send_message(&self, msg: GameEvent) {
         let msg = TransportMessage::Game(msg);
         self.send_transport_message(None, msg).await;
     }

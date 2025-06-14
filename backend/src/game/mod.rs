@@ -2,13 +2,7 @@ use chrono::{DateTime, Utc};
 pub use events::GameEvent;
 use powerups::PowerUpType;
 pub use settings::GameSettings;
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Display},
-    hash::Hash,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use uuid::Uuid;
 
 use tokio::{sync::RwLock, time::MissedTickBehavior};
@@ -24,13 +18,7 @@ pub use location::{Location, LocationService};
 pub use state::GameState;
 pub use transport::Transport;
 
-pub trait PlayerId:
-    Display + Debug + Hash + Ord + Eq + PartialEq + Send + Sync + Sized + Copy + Clone + specta::Type
-{
-
-}
-
-impl PlayerId for Uuid {}
+pub type Id = Uuid;
 
 /// Convenence alias for UTC DT
 pub type UtcDT = DateTime<Utc>;
@@ -38,14 +26,14 @@ pub type UtcDT = DateTime<Utc>;
 /// Struct representing an ongoing game, handles communication with
 /// other clients via [Transport], gets location with [LocationService], and provides high-level methods for
 /// taking actions in the game.
-pub struct Game<Id: PlayerId, L: LocationService, T: Transport<Id>> {
-    state: RwLock<GameState<Id>>,
+pub struct Game<L: LocationService, T: Transport> {
+    state: RwLock<GameState>,
     transport: Arc<T>,
     location: L,
     interval: Duration,
 }
 
-impl<Id: PlayerId, L: LocationService, T: Transport<Id>> Game<Id, L, T> {
+impl<L: LocationService, T: Transport> Game<L, T> {
     pub fn new(
         my_id: Id,
         interval: Duration,
@@ -54,7 +42,7 @@ impl<Id: PlayerId, L: LocationService, T: Transport<Id>> Game<Id, L, T> {
         transport: Arc<T>,
         location: L,
     ) -> Self {
-        let state = GameState::<Id>::new(settings, my_id, initial_caught_state);
+        let state = GameState::new(settings, my_id, initial_caught_state);
 
         Self {
             transport,
@@ -64,7 +52,7 @@ impl<Id: PlayerId, L: LocationService, T: Transport<Id>> Game<Id, L, T> {
         }
     }
 
-    pub async fn clone_state(&self) -> GameState<Id> {
+    pub async fn clone_state(&self) -> GameState {
         self.state.read().await.clone()
     }
 
@@ -116,7 +104,7 @@ impl<Id: PlayerId, L: LocationService, T: Transport<Id>> Game<Id, L, T> {
         }
     }
 
-    async fn consume_event(&self, event: GameEvent<Id>) {
+    async fn consume_event(&self, event: GameEvent) {
         let mut state = self.state.write().await;
 
         match event {
@@ -235,23 +223,21 @@ mod tests {
     use super::*;
     use tokio::{sync::Mutex, task::yield_now, test};
 
-    type GameEventRx = tokio::sync::mpsc::Receiver<GameEvent<u32>>;
-    type GameEventTx = tokio::sync::mpsc::Sender<GameEvent<u32>>;
-
-    impl PlayerId for u32 {}
+    type GameEventRx = tokio::sync::mpsc::Receiver<GameEvent>;
+    type GameEventTx = tokio::sync::mpsc::Sender<GameEvent>;
 
     struct MockTransport {
         rx: Mutex<GameEventRx>,
         txs: Vec<GameEventTx>,
     }
 
-    impl Transport<u32> for MockTransport {
-        async fn receive_message(&self) -> Option<GameEvent<u32>> {
+    impl Transport for MockTransport {
+        async fn receive_message(&self) -> Option<GameEvent> {
             let mut rx = self.rx.lock().await;
             rx.recv().await
         }
 
-        async fn send_message(&self, msg: GameEvent<u32>) {
+        async fn send_message(&self, msg: GameEvent) {
             for (_id, tx) in self.txs.iter().enumerate() {
                 tx.send(msg.clone()).await.expect("Failed to send msg");
             }
@@ -270,9 +256,10 @@ mod tests {
         }
     }
 
-    type TestGame = Game<u32, MockLocation, MockTransport>;
+    type TestGame = Game<MockLocation, MockTransport>;
 
     struct MockMatch {
+        uuids: Vec<Uuid>,
         games: HashMap<u32, Arc<TestGame>>,
         settings: GameSettings,
         mock_now: UtcDT,
@@ -282,6 +269,11 @@ mod tests {
 
     impl MockMatch {
         pub fn new(settings: GameSettings, players: u32, seekers: u32) -> Self {
+            let uuids = (0..players)
+                .into_iter()
+                .map(|_| uuid::Uuid::new_v4())
+                .collect::<Vec<_>>();
+
             let channels = (0..players)
                 .into_iter()
                 .map(|_| tokio::sync::mpsc::channel(10))
@@ -289,7 +281,7 @@ mod tests {
 
             let initial_caught_state = (0..players)
                 .into_iter()
-                .map(|id| (id, id < seekers))
+                .map(|id| (uuids[id as usize], id < seekers))
                 .collect::<HashMap<_, _>>();
             let txs = channels
                 .iter()
@@ -306,7 +298,7 @@ mod tests {
                     };
                     let location = MockLocation;
                     let game = TestGame::new(
-                        id as u32,
+                        uuids[id],
                         INTERVAL,
                         initial_caught_state.clone(),
                         settings.clone(),
@@ -321,6 +313,7 @@ mod tests {
             Self {
                 settings,
                 games,
+                uuids,
                 mock_now: Utc::now(),
             }
         }
@@ -339,7 +332,7 @@ mod tests {
             self.mock_now += d;
         }
 
-        pub async fn assert_all_states(&self, f: impl Fn(&GameState<u32>)) {
+        pub async fn assert_all_states(&self, f: impl Fn(&GameState)) {
             for (_, game) in &self.games {
                 let state = game.state.read().await;
                 f(&state);
@@ -408,7 +401,7 @@ mod tests {
 
         mat.assert_all_states(|s| {
             assert_eq!(
-                s.get_caught(1),
+                s.get_caught(mat.uuids[1]),
                 Some(true),
                 "Game {} sees player 1 as not caught",
                 s.id
@@ -432,7 +425,7 @@ mod tests {
 
         mat.assert_all_states(|s| {
             for id in 0..4 {
-                let ping = s.get_ping(id);
+                let ping = s.get_ping(mat.uuids[id]);
                 if id == 0 {
                     assert!(
                         ping.is_none(),
@@ -457,7 +450,7 @@ mod tests {
 
         mat.assert_all_states(|s| {
             for id in 0..4 {
-                let ping = s.get_ping(id);
+                let ping = s.get_ping(mat.uuids[id]);
                 if id <= 1 {
                     assert!(
                         ping.is_none(),
@@ -535,9 +528,9 @@ mod tests {
         mat.tick().await;
 
         mat.assert_all_states(|s| {
-            if let Some(ping) = s.get_ping(1) {
+            if let Some(ping) = s.get_ping(mat.uuids[1]) {
                 assert_eq!(
-                    ping.real_player, 0,
+                    ping.real_player, mat.uuids[0],
                     "Ping for 1 is not truly 0 (in {})",
                     s.id
                 );
@@ -568,9 +561,9 @@ mod tests {
         mat.assert_all_states(|s| {
             // Player 0 is a seeker, player 1 user the powerup, so 2 is the only one that should
             // could have pinged
-            assert!(s.get_ping(2).is_some());
-            assert!(s.get_ping(0).is_none());
-            assert!(s.get_ping(1).is_none());
+            assert!(s.get_ping(mat.uuids[2]).is_some());
+            assert!(s.get_ping(mat.uuids[0]).is_none());
+            assert!(s.get_ping(mat.uuids[1]).is_none());
         })
         .await;
     }
@@ -594,7 +587,7 @@ mod tests {
         mat.assert_all_states(|s| {
             for id in 0..3 {
                 assert!(
-                    s.get_caught(id).is_some(),
+                    s.get_caught(mat.uuids[id]).is_some(),
                     "Player {} should be pinged due to the powerup (in {})",
                     id,
                     s.id

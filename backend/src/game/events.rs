@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use super::{location::Location, state::PlayerPing, PlayerId};
+use super::{location::Location, state::PlayerPing, Id};
 
 /// An event used between players to update state
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum GameEvent<Id: PlayerId> {
+pub enum GameEvent {
     /// A player has been caught and is now a seeker, contains the ID of the caught player
     PlayerCaught(Id),
     /// Public ping from a player revealing location
-    Ping(PlayerPing<Id>),
+    Ping(PlayerPing),
     /// Force the player specified in `0` to ping, optionally display the ping as from the user
     /// specified in `1`.
     ForcePing(Id, Option<Id>),

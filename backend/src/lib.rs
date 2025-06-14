@@ -6,7 +6,7 @@ mod transport;
 
 use std::{sync::Arc, time::Duration};
 
-use game::{Game as BaseGame, GameSettings, GameState as BaseGameState};
+use game::{Game as BaseGame, GameSettings, GameState};
 use lobby::{Lobby, LobbyState, StartGameInfo};
 use location::TauriLocation;
 use profile::PlayerProfile;
@@ -18,7 +18,7 @@ use tokio::sync::RwLock;
 use transport::MatchboxTransport;
 use uuid::Uuid;
 
-type Game = BaseGame<Uuid, TauriLocation, MatchboxTransport>;
+type Game = BaseGame<TauriLocation, MatchboxTransport>;
 
 enum AppState {
     Setup,
@@ -241,12 +241,10 @@ async fn host_start_game(state: State<'_, AppStateHandle>) -> Result {
 
 // AppScreen::Game COMMANDS
 
-type AppGameState = BaseGameState<Uuid>;
-
 #[tauri::command]
 #[specta::specta]
 /// (Screen: Game) Mark this player as caught, this player will become a seeker. Returns the new game state
-async fn mark_caught(state: State<'_, AppStateHandle>) -> Result<AppGameState> {
+async fn mark_caught(state: State<'_, AppStateHandle>) -> Result<GameState> {
     let state = state.read().await;
     if let AppState::Game(game) = &*state {
         game.mark_caught().await;
@@ -260,7 +258,7 @@ async fn mark_caught(state: State<'_, AppStateHandle>) -> Result<AppGameState> {
 #[specta::specta]
 /// (Screen: Game) Grab a powerup on the map, this should be called when the user is *in range* of
 /// the powerup. Returns the new game state after rolling for the powerup
-async fn grab_powerup(state: State<'_, AppStateHandle>) -> Result<AppGameState> {
+async fn grab_powerup(state: State<'_, AppStateHandle>) -> Result<GameState> {
     let state = state.read().await;
     if let AppState::Game(game) = &*state {
         game.get_powerup().await;
@@ -274,7 +272,7 @@ async fn grab_powerup(state: State<'_, AppStateHandle>) -> Result<AppGameState> 
 #[specta::specta]
 /// (Screen: Game) Use the currently held powerup in the player's held_powerup. Does nothing if the
 /// player has none. Returns the updated game state
-async fn use_powerup(state: State<'_, AppStateHandle>) -> Result<AppGameState> {
+async fn use_powerup(state: State<'_, AppStateHandle>) -> Result<GameState> {
     let state = state.read().await;
     if let AppState::Game(game) = &*state {
         game.use_powerup().await;
@@ -298,8 +296,8 @@ pub fn run() {
         switch_teams,
         host_start_game,
         mark_caught,
-        // grab_powerup,
-        // use_powerup,
+        grab_powerup,
+        use_powerup,
     ]);
 
     #[cfg(debug_assertions)]

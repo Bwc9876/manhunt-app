@@ -13,12 +13,12 @@ use super::{
     location::Location,
     powerups::PowerUpType,
     settings::{GameSettings, PingStartCondition},
-    PlayerId, UtcDT,
+    Id, UtcDT,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 /// An on-map ping of a player
-pub struct PlayerPing<Id: PlayerId> {
+pub struct PlayerPing {
     /// Location of the ping
     loc: Location,
     /// Time the ping happened
@@ -29,7 +29,7 @@ pub struct PlayerPing<Id: PlayerId> {
     pub real_player: Id,
 }
 
-impl<Id: PlayerId> PlayerPing<Id> {
+impl PlayerPing {
     pub fn new(loc: Location, display_player: Id, real_player: Id) -> Self {
         Self {
             loc,
@@ -42,7 +42,7 @@ impl<Id: PlayerId> PlayerPing<Id> {
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
 /// This struct handles all logic regarding state updates
-pub struct GameState<Id: PlayerId> {
+pub struct GameState {
     /// The id of this player in this game
     pub id: Id,
 
@@ -65,7 +65,7 @@ pub struct GameState<Id: PlayerId> {
     caught_state: HashMap<Id, bool>,
 
     /// A map of the latest global ping results for each player
-    pings: HashMap<Id, PlayerPing<Id>>,
+    pings: HashMap<Id, PlayerPing>,
 
     /// Powerup on the map that players can grab. Only one at a time
     available_powerup: Option<Location>,
@@ -92,7 +92,7 @@ pub struct GameState<Id: PlayerId> {
     shared_random_state: u64,
 }
 
-impl<Id: PlayerId> GameState<Id> {
+impl GameState {
     pub fn new(settings: GameSettings, my_id: Id, initial_caught_state: HashMap<Id, bool>) -> Self {
         let mut rand = ChaCha20Rng::seed_from_u64(settings.random_seed as u64);
         let increment = rand.random_range(-100..100);
@@ -230,23 +230,23 @@ impl<Id: PlayerId> GameState<Id> {
     }
 
     /// Add a ping for a specific player
-    pub fn add_ping(&mut self, ping: PlayerPing<Id>) {
+    pub fn add_ping(&mut self, ping: PlayerPing) {
         self.pings.insert(ping.display_player, ping);
     }
 
     /// Get a ping for a player
     #[cfg(test)]
-    pub fn get_ping(&self, player: Id) -> Option<&PlayerPing<Id>> {
+    pub fn get_ping(&self, player: Id) -> Option<&PlayerPing> {
         self.pings.get(&player)
     }
 
     /// Remove a ping from the map
-    pub fn remove_ping(&mut self, player: Id) -> Option<PlayerPing<Id>> {
+    pub fn remove_ping(&mut self, player: Id) -> Option<PlayerPing> {
         self.pings.remove(&player)
     }
 
     /// Iterate over all seekers in the game
-    pub fn iter_seekers(&self) -> impl Iterator<Item = Id> + use<'_, Id> {
+    pub fn iter_seekers(&self) -> impl Iterator<Item = Id> + use<'_> {
         self.caught_state
             .iter()
             .filter_map(|(k, v)| if *v { Some(*k) } else { None })
@@ -260,7 +260,7 @@ impl<Id: PlayerId> GameState<Id> {
     }
 
     /// Iterate over all hiders in the game
-    fn iter_hiders(&self) -> impl Iterator<Item = Id> + use<'_, Id> {
+    fn iter_hiders(&self) -> impl Iterator<Item = Id> + use<'_> {
         self.caught_state
             .iter()
             .filter_map(|(k, v)| if !*v { Some(*k) } else { None })
@@ -274,12 +274,12 @@ impl<Id: PlayerId> GameState<Id> {
     }
 
     /// Create a [PlayerPing] with the latest location saved for the player
-    pub fn create_self_ping(&self) -> Option<PlayerPing<Id>> {
+    pub fn create_self_ping(&self) -> Option<PlayerPing> {
         self.create_ping(self.id)
     }
 
     /// Create a [PlayerPing] with the latest location as another player
-    pub fn create_ping(&self, id: Id) -> Option<PlayerPing<Id>> {
+    pub fn create_ping(&self, id: Id) -> Option<PlayerPing> {
         self.get_loc()
             .map(|loc| PlayerPing::new(loc.clone(), id, self.id))
     }
