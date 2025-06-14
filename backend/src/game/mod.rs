@@ -216,7 +216,7 @@ impl<L: LocationService, T: Transport> Game<L, T> {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, u64};
+    use std::sync::Arc;
 
     use crate::game::{location::Location, settings::PingStartCondition};
 
@@ -238,7 +238,7 @@ mod tests {
         }
 
         async fn send_message(&self, msg: GameEvent) {
-            for (_id, tx) in self.txs.iter().enumerate() {
+            for tx in self.txs.iter() {
                 tx.send(msg.clone()).await.expect("Failed to send msg");
             }
         }
@@ -270,17 +270,14 @@ mod tests {
     impl MockMatch {
         pub fn new(settings: GameSettings, players: u32, seekers: u32) -> Self {
             let uuids = (0..players)
-                .into_iter()
                 .map(|_| uuid::Uuid::new_v4())
                 .collect::<Vec<_>>();
 
             let channels = (0..players)
-                .into_iter()
                 .map(|_| tokio::sync::mpsc::channel(10))
                 .collect::<Vec<_>>();
 
             let initial_caught_state = (0..players)
-                .into_iter()
                 .map(|id| (uuids[id as usize], id < seekers))
                 .collect::<HashMap<_, _>>();
             let txs = channels
@@ -319,7 +316,7 @@ mod tests {
         }
 
         pub async fn start(&self) {
-            for (_id, game) in &self.games {
+            for game in self.games.values() {
                 let game = game.clone();
                 tokio::spawn(async move {
                     game.main_loop().await;
@@ -333,7 +330,7 @@ mod tests {
         }
 
         pub async fn assert_all_states(&self, f: impl Fn(&GameState)) {
-            for (_, game) in &self.games {
+            for game in self.games.values() {
                 let state = game.state.read().await;
                 f(&state);
             }
@@ -356,7 +353,7 @@ mod tests {
         }
 
         async fn tick_all(&self, now: UtcDT) {
-            for (_, game) in &self.games {
+            for game in self.games.values() {
                 game.force_tick(now).await;
             }
         }
@@ -478,7 +475,6 @@ mod tests {
         settings.powerup_minutes_cooldown = 1;
         settings.powerup_start = PingStartCondition::Instant;
         settings.powerup_locations = (1..1000)
-            .into_iter()
             .map(|x| Location {
                 lat: x as f64,
                 long: 1.0,

@@ -31,8 +31,7 @@ type AppStateHandle = RwLock<AppState>;
 fn generate_join_code() -> String {
     // 5 character sequence of A-Z
     (0..5)
-        .into_iter()
-        .map(|_| (('A' as u8) + rand::random_range(0..26)) as char)
+        .map(|_| (b'A' + rand::random_range(0..26)) as char)
         .collect::<String>()
 }
 
@@ -48,24 +47,21 @@ const fn server_url() -> &'static str {
 
 impl AppState {
     pub fn start_game(&mut self, app: AppHandle, my_id: Uuid, start: StartGameInfo) {
-        match self {
-            AppState::Lobby(lobby) => {
-                let transport = lobby.clone_transport();
-                let location = TauriLocation::new(app.clone());
-                let game = Arc::new(Game::new(
-                    my_id,
-                    GAME_TICK_RATE,
-                    start.initial_caught_state,
-                    start.settings,
-                    transport,
-                    location,
-                ));
-                *self = AppState::Game(game.clone());
-                tokio::spawn(async move {
-                    game.main_loop().await;
-                });
-            }
-            _ => {}
+        if let AppState::Lobby(lobby) = self {
+            let transport = lobby.clone_transport();
+            let location = TauriLocation::new(app.clone());
+            let game = Arc::new(Game::new(
+                my_id,
+                GAME_TICK_RATE,
+                start.initial_caught_state,
+                start.settings,
+                transport,
+                location,
+            ));
+            *self = AppState::Game(game.clone());
+            tokio::spawn(async move {
+                game.main_loop().await;
+            });
         }
     }
 
@@ -75,27 +71,24 @@ impl AppState {
         app: AppHandle,
         settings: GameSettings,
     ) {
-        match self {
-            AppState::Menu(profile) => {
-                let host = join_code.is_none();
-                let room_code = join_code.unwrap_or_else(generate_join_code);
-                let lobby = Arc::new(Lobby::new(
-                    server_url(),
-                    &room_code,
-                    host,
-                    profile.clone(),
-                    settings,
-                ));
-                *self = AppState::Lobby(lobby.clone());
-                tokio::spawn(async move {
-                    let (my_id, start) = lobby.open().await;
-                    let app_game = app.clone();
-                    let state_handle = app.state::<AppStateHandle>();
-                    let mut state = state_handle.write().await;
-                    state.start_game(app_game, my_id, start);
-                });
-            }
-            _ => {}
+        if let AppState::Menu(profile) = self {
+            let host = join_code.is_none();
+            let room_code = join_code.unwrap_or_else(generate_join_code);
+            let lobby = Arc::new(Lobby::new(
+                server_url(),
+                &room_code,
+                host,
+                profile.clone(),
+                settings,
+            ));
+            *self = AppState::Lobby(lobby.clone());
+            tokio::spawn(async move {
+                let (my_id, start) = lobby.open().await;
+                let app_game = app.clone();
+                let state_handle = app.state::<AppStateHandle>();
+                let mut state = state_handle.write().await;
+                state.start_game(app_game, my_id, start);
+            });
         }
     }
 }

@@ -280,8 +280,7 @@ impl GameState {
 
     /// Create a [PlayerPing] with the latest location as another player
     pub fn create_ping(&self, id: Id) -> Option<PlayerPing> {
-        self.get_loc()
-            .map(|loc| PlayerPing::new(loc.clone(), id, self.id))
+        self.get_loc().map(|loc| PlayerPing::new(*loc, id, self.id))
     }
 
     /// Player has gotten a powerup, rolls to see which powerup and stores it
