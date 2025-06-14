@@ -1,9 +1,14 @@
 use chrono::{DateTime, Utc};
 pub use events::GameEvent;
-use matchbox_socket::PeerId;
 use powerups::PowerUpType;
 pub use settings::GameSettings;
-use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Deref, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    hash::Hash,
+    sync::Arc,
+    time::Duration,
+};
 use uuid::Uuid;
 
 use tokio::{sync::RwLock, time::MissedTickBehavior};
@@ -16,17 +21,16 @@ mod state;
 mod transport;
 
 pub use location::{Location, LocationService};
-use state::GameState;
+pub use state::GameState;
 pub use transport::Transport;
 
-/// Type used to uniquely identify players in the game
 pub trait PlayerId:
-    Debug + Hash + Ord + Eq + PartialEq + Send + Sync + Sized + Copy + Clone
+    Display + Debug + Hash + Ord + Eq + PartialEq + Send + Sync + Sized + Copy + Clone + specta::Type
 {
+
 }
 
 impl PlayerId for Uuid {}
-impl PlayerId for PeerId {}
 
 /// Convenence alias for UTC DT
 pub type UtcDT = DateTime<Utc>;
@@ -58,6 +62,10 @@ impl<Id: PlayerId, L: LocationService, T: Transport<Id>> Game<Id, L, T> {
             interval,
             state: RwLock::new(state),
         }
+    }
+
+    pub async fn clone_state(&self) -> GameState<Id> {
+        self.state.read().await.clone()
     }
 
     pub async fn mark_caught(&self) {
@@ -244,7 +252,7 @@ mod tests {
         }
 
         async fn send_message(&self, msg: GameEvent<u32>) {
-            for (id, tx) in self.txs.iter().enumerate() {
+            for (_id, tx) in self.txs.iter().enumerate() {
                 tx.send(msg.clone()).await.expect("Failed to send msg");
             }
         }
@@ -318,9 +326,8 @@ mod tests {
         }
 
         pub async fn start(&self) {
-            for (id, game) in &self.games {
+            for (_id, game) in &self.games {
                 let game = game.clone();
-                let id = *id;
                 tokio::spawn(async move {
                     game.main_loop().await;
                 });
@@ -572,7 +579,7 @@ mod tests {
     async fn test_powerup_ping_seekers() {
         let settings = mk_settings();
 
-        let mut mat = MockMatch::new(settings, 5, 3);
+        let mat = MockMatch::new(settings, 5, 3);
 
         mat.start().await;
 

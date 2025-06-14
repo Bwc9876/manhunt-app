@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{location::Location, PlayerId};
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type)]
 /// Type of powerup
 pub enum PowerUpType {
     /// Ping a random seeker instead of a hider

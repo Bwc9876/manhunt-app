@@ -1,9 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
-use matchbox_socket::PeerId;
 use serde::{Deserialize, Serialize};
-use tauri::{path::BaseDirectory, AppHandle, Manager};
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 use crate::{
     game::GameSettings,
@@ -14,7 +13,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartGameInfo {
     pub settings: GameSettings,
-    pub initial_caught_state: HashMap<PeerId, bool>,
+    pub initial_caught_state: HashMap<Uuid, bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,20 +28,19 @@ pub enum LobbyMessage {
     PlayerSwitch(bool),
 }
 
-#[derive(Serialize, Deserialize)]
-struct LobbyState {
-    profiles: HashMap<PeerId, PlayerProfile>,
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
+pub struct LobbyState {
+    profiles: HashMap<Uuid, PlayerProfile>,
     join_code: String,
     /// True represents seeker, false hider
-    teams: HashMap<PeerId, bool>,
+    teams: HashMap<Uuid, bool>,
     self_seeker: bool,
     settings: GameSettings,
 }
 
 pub struct Lobby {
-    pfp_dir: PathBuf,
     is_host: bool,
-    self_profile: PlayerProfile,
+    pub self_profile: PlayerProfile,
     state: Mutex<LobbyState>,
     transport: Arc<MatchboxTransport>,
 }
@@ -51,18 +49,11 @@ impl Lobby {
     pub fn new(
         ws_url_base: &str,
         join_code: &str,
-        app: AppHandle,
         host: bool,
         profile: PlayerProfile,
         settings: GameSettings,
     ) -> Self {
-        let pfp_dir = app
-            .path()
-            .resolve("pfp_cache", BaseDirectory::Cache)
-            .expect("Failed to get Cache Dir");
-
         Self {
-            pfp_dir,
             transport: Arc::new(MatchboxTransport::new(&format!(
                 "{ws_url_base}/{join_code}"
             ))),
@@ -80,6 +71,10 @@ impl Lobby {
 
     pub fn clone_transport(&self) -> Arc<MatchboxTransport> {
         self.transport.clone()
+    }
+
+    pub async fn clone_state(&self) -> LobbyState {
+        self.state.lock().await.clone()
     }
 
     /// Set self as seeker or hider
@@ -123,7 +118,7 @@ impl Lobby {
         }
     }
 
-    pub async fn open(&self) -> (PeerId, StartGameInfo) {
+    pub async fn open(&self) -> (Uuid, StartGameInfo) {
         let transport_inner = self.transport.clone();
         tokio::spawn(async move { transport_inner.transport_loop().await });
 

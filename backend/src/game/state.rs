@@ -1,10 +1,8 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use rand::{
     distr::{Bernoulli, Distribution},
-    rngs::ThreadRng,
     seq::{IndexedRandom, IteratorRandom},
     Rng, SeedableRng,
 };
@@ -18,7 +16,7 @@ use super::{
     PlayerId, UtcDT,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 /// An on-map ping of a player
 pub struct PlayerPing<Id: PlayerId> {
     /// Location of the ping
@@ -42,8 +40,7 @@ impl<Id: PlayerId> PlayerPing<Id> {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
-/// Represents the game's state as a whole, seamlessly connects public and player state.
+#[derive(Debug, Clone, Serialize, specta::Type)]
 /// This struct handles all logic regarding state updates
 pub struct GameState<Id: PlayerId> {
     /// The id of this player in this game
@@ -73,6 +70,7 @@ pub struct GameState<Id: PlayerId> {
     /// Powerup on the map that players can grab. Only one at a time
     available_powerup: Option<Location>,
 
+    #[serde(skip)]
     /// The game's current settings
     settings: GameSettings,
 
@@ -96,7 +94,7 @@ pub struct GameState<Id: PlayerId> {
 
 impl<Id: PlayerId> GameState<Id> {
     pub fn new(settings: GameSettings, my_id: Id, initial_caught_state: HashMap<Id, bool>) -> Self {
-        let mut rand = ChaCha20Rng::seed_from_u64(settings.random_seed);
+        let mut rand = ChaCha20Rng::seed_from_u64(settings.random_seed as u64);
         let increment = rand.random_range(-100..100);
 
         Self {
@@ -107,7 +105,7 @@ impl<Id: PlayerId> GameState<Id> {
             caught_state: initial_caught_state,
             available_powerup: None,
             powerup_bernoulli: settings.get_powerup_bernoulli(),
-            shared_random_state: settings.random_seed,
+            shared_random_state: settings.random_seed as u64,
             settings,
             last_global_ping: None,
             last_powerup_spawn: None,
@@ -169,7 +167,7 @@ impl<Id: PlayerId> GameState<Id> {
         !self.is_seeker()
             && self.last_global_ping.as_ref().is_some_and(|last_ping| {
                 let minutes = (*now - *last_ping).num_minutes().unsigned_abs();
-                minutes >= self.settings.ping_minutes_interval
+                minutes >= (self.settings.ping_minutes_interval as u64)
             })
     }
 
@@ -202,10 +200,11 @@ impl<Id: PlayerId> GameState<Id> {
     pub fn should_spawn_powerup(&self, now: &UtcDT) -> bool {
         self.last_powerup_spawn.as_ref().is_some_and(|last_spawn| {
             let minutes = (*now - *last_spawn).num_minutes().unsigned_abs();
-            minutes >= self.settings.powerup_minutes_cooldown
+            minutes >= (self.settings.powerup_minutes_cooldown as u64)
         })
     }
 
+    #[cfg(test)]
     pub fn powerup_location(&self) -> Option<Location> {
         self.available_powerup
     }
@@ -236,6 +235,7 @@ impl<Id: PlayerId> GameState<Id> {
     }
 
     /// Get a ping for a player
+    #[cfg(test)]
     pub fn get_ping(&self, player: Id) -> Option<&PlayerPing<Id>> {
         self.pings.get(&player)
     }
@@ -292,6 +292,7 @@ impl<Id: PlayerId> GameState<Id> {
         self.held_powerup = choice;
     }
 
+    #[cfg(test)]
     pub fn force_set_powerup(&mut self, typ: PowerUpType) {
         self.held_powerup = Some(typ);
     }
@@ -323,6 +324,7 @@ impl<Id: PlayerId> GameState<Id> {
     }
 
     /// Gets if a player was caught or not
+    #[cfg(test)]
     pub fn get_caught(&self, player: Id) -> Option<bool> {
         self.caught_state.get(&player).copied()
     }

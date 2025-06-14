@@ -1,9 +1,10 @@
 use std::{collections::HashSet, time::Duration};
 
-use futures::{FutureExt, SinkExt};
+use futures::FutureExt;
 use matchbox_socket::{PeerId, PeerState, WebRtcSocket};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
+use uuid::Uuid;
 
 use crate::{
     game::{GameEvent, Transport},
@@ -13,7 +14,7 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum TransportMessage {
     /// Message related to the actual game
-    Game(GameEvent<PeerId>),
+    Game(GameEvent<Uuid>),
     /// Message related to the pre-game lobby
     Lobby(LobbyMessage),
     /// Internal message when peer connects
@@ -22,11 +23,11 @@ pub enum TransportMessage {
     PeerDisconnect,
 }
 
-type OutgoingMsgPair = (Option<PeerId>, TransportMessage);
+type OutgoingMsgPair = (Option<Uuid>, TransportMessage);
 type OutgoingQueueSender = tokio::sync::mpsc::Sender<OutgoingMsgPair>;
 type OutgoingQueueReceiver = tokio::sync::mpsc::Receiver<OutgoingMsgPair>;
 
-type IncomingMsgPair = (PeerId, TransportMessage);
+type IncomingMsgPair = (Uuid, TransportMessage);
 type IncomingQueueSender = tokio::sync::mpsc::Sender<IncomingMsgPair>;
 type IncomingQueueReceiver = tokio::sync::mpsc::Receiver<IncomingMsgPair>;
 
@@ -34,7 +35,7 @@ pub struct MatchboxTransport {
     ws_url: String,
     incoming: (IncomingQueueSender, Mutex<IncomingQueueReceiver>),
     outgoing: (OutgoingQueueSender, Mutex<OutgoingQueueReceiver>),
-    my_id: RwLock<Option<PeerId>>,
+    my_id: RwLock<Option<Uuid>>,
 }
 
 impl MatchboxTransport {
@@ -50,7 +51,7 @@ impl MatchboxTransport {
         }
     }
 
-    pub async fn send_transport_message(&self, peer: Option<PeerId>, msg: TransportMessage) {
+    pub async fn send_transport_message(&self, peer: Option<Uuid>, msg: TransportMessage) {
         self.outgoing
             .0
             .send((peer, msg))
@@ -63,7 +64,7 @@ impl MatchboxTransport {
         incoming_rx.recv().await
     }
 
-    pub async fn get_my_id(&self) -> Option<PeerId> {
+    pub async fn get_my_id(&self) -> Option<Uuid> {
         *self.my_id.read().await
     }
 
@@ -92,7 +93,7 @@ impl MatchboxTransport {
                 };
                 self.incoming
                     .0
-                    .send((peer, msg))
+                    .send((peer.0, msg))
                     .await
                     .expect("Failed to push to incoming queue");
             }
@@ -101,7 +102,7 @@ impl MatchboxTransport {
                 if let Ok(msg) = rmp_serde::from_slice(&data) {
                     self.incoming
                         .0
-                        .send((peer, msg))
+                        .send((peer.0, msg))
                         .await
                         .expect("Failed to push to incoming queue");
                 }
@@ -109,8 +110,8 @@ impl MatchboxTransport {
 
             if my_id.is_none() {
                 if let Some(new_id) = socket.id() {
-                    my_id = Some(new_id);
-                    *self.my_id.write().await = Some(new_id);
+                    my_id = Some(new_id.0);
+                    *self.my_id.write().await = Some(new_id.0);
                 }
             }
 
@@ -128,7 +129,7 @@ impl MatchboxTransport {
                     if let Some(peer) = peer {
                         let channel = socket.channel_mut(0);
                         let data = encoded.into_boxed_slice();
-                        channel.send(data, peer);
+                        channel.send(data, PeerId(peer));
                     } else {
                         // Send to self as well
                         if let Some(myself) = my_id {
@@ -153,8 +154,8 @@ impl MatchboxTransport {
     }
 }
 
-impl Transport<PeerId> for MatchboxTransport {
-    async fn receive_message(&self) -> Option<GameEvent<PeerId>> {
+impl Transport<Uuid> for MatchboxTransport {
+    async fn receive_message(&self) -> Option<GameEvent<Uuid>> {
         self.recv_transport_message()
             .await
             .and_then(|(_, msg)| match msg {
@@ -163,7 +164,7 @@ impl Transport<PeerId> for MatchboxTransport {
             })
     }
 
-    async fn send_message(&self, msg: GameEvent<PeerId>) {
+    async fn send_message(&self, msg: GameEvent<Uuid>) {
         let msg = TransportMessage::Game(msg);
         self.send_transport_message(None, msg).await;
     }

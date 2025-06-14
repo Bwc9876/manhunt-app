@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// A "part" of a location
 pub type LocationComponent = f64;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, specta::Type)]
 /// Some location in the world as gotten from a Geolocation API
 pub struct Location {
     /// Latitude

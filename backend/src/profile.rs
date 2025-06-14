@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, specta::Type)]
 pub struct PlayerProfile {
     display_name: String,
     pfp_base64: Option<String>,
@@ -11,9 +11,9 @@ pub struct PlayerProfile {
 const STORE_NAME: &str = "profile.json";
 
 impl PlayerProfile {
-    pub fn has_pfp(&self) -> bool {
-        self.pfp_base64.is_some()
-    }
+    // pub fn has_pfp(&self) -> bool {
+    //     self.pfp_base64.is_some()
+    // }
 
     pub fn load_from_store(app: &AppHandle) -> Option<Self> {
         let store = app.store(STORE_NAME).expect("Couldn't Create Store");
