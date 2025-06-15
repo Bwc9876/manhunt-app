@@ -3,6 +3,7 @@
   libsoup_3,
   dbus,
   glib,
+  clippy,
   glib-networking,
   librsvg,
   webkitgtk_4_1,
@@ -21,12 +22,16 @@ rustPlatform.buildRustPackage {
   buildFeatures = [
     "tauri/custom-protocol"
   ];
-  doCheck = false;
+
+  postCheck = ''
+    cargo clippy --no-deps -- -D warnings
+  '';
 
   nativeBuildInputs = [
     pkg-config
     copyDesktopItems
     wrapGAppsHook
+    clippy
   ];
 
   buildInputs = [
