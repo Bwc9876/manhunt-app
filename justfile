@@ -23,9 +23,15 @@ dev-android:
 # Run a check on the backend
 [working-directory: 'backend']
 check-backend:
+    cargo fmt --check
     cargo check
     cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
 
+[working-directory: 'manhunt-signaling']
+check-signaling:
+    cargo fmt --check
+    cargo check
+    cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
 
 # Run lint on the frontend
 [working-directory: 'frontend']
@@ -41,4 +47,4 @@ export-types:
 # Start the signaling server on localhost:3536
 [working-directory: 'manhunt-signaling']
 signaling:
-    cargo run 127.0.0.1:3536
+    cargo run 0.0.0.0:3536

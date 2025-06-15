@@ -61,6 +61,7 @@
           harfbuzz
           librsvg
           libsoup_3
+          just
           pango
           webkitgtk_4_1
           openssl
