@@ -15,10 +15,10 @@
       };
 
       flakelight.builtinFormatters = false;
-      formatters = {
-        "*.nix" = "alejandra .";
-        "*.{js,ts,jsx,tsx,md,json}" = "prettier --write . --config frontend/.prettierrc.yaml";
-        "*.rs" = "cd backend; cargo fmt";
+      formatters = pkgs: {
+        "*.nix" = "${pkgs.alejandra}/bin/alejandra .";
+        "*.{js,ts,jsx,tsx,md,json}" = "${pkgs.prettier}/bin/prettier --write . --config frontend/.prettierrc.yaml";
+        "*.rs" = "${pkgs.rustfmt}";
       };
 
       devShell = pkgs: let
