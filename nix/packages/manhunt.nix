@@ -16,24 +16,14 @@
 rustPlatform.buildRustPackage {
   pname = "manhunt";
   version = "0.1.0";
-  src = with lib.fileset;
-    toSource {
-      root = ../../.;
-      fileset = unions [
-        ../../Cargo.toml
-        ../../Cargo.lock
-        ../../backend
-        ../../manhunt-signaling
-      ];
-    };
+  src = ../../backend;
   cargoLock.lockFile = ../../Cargo.lock;
-  buildAndTestSubdir = "backend";
   buildFeatures = [
     "tauri/custom-protocol"
   ];
 
   postCheck = ''
-    cargo clippy -p backend --no-deps -- -D warnings
+    cargo clippy --no-deps -- -D warnings
   '';
 
   nativeBuildInputs = [
@@ -53,7 +43,10 @@ rustPlatform.buildRustPackage {
   ];
 
   postPatch = ''
-    substituteInPlace backend/tauri.conf.json \
+    cp ${../../Cargo.lock} Cargo.lock
+    chmod +w Cargo.lock
+
+    substituteInPlace tauri.conf.json \
     --replace '"frontendDist": "../frontend/dist"' '"frontendDist": "${manhunt-frontend}"'
   '';
 
