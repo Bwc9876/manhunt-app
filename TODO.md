@@ -11,7 +11,7 @@
 - [ ] ALL : State Update Events
 - [ ] ALL : Game Replay Screen
 - [ ] Frontend : Scaffolding
-- [ ] Meta : CI Setup
-- [ ] Meta : README Instructions
+- [x] Meta : CI Setup
+- [x] Meta : README Instructions
 - [x] Meta : Recipes for type binding generation
 - [x] Singaling: All of it
