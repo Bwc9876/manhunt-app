@@ -1,8 +1,9 @@
 _default:
     @just --list --unsorted --justfile {{justfile()}}
 
-[working-directory: 'frontend']
+
 # Perform setup for the frontend using `npm`
+[working-directory: 'frontend']
 setup-frontend:
     npm install --no-fund --no-audit
 
@@ -10,18 +11,24 @@ setup-frontend:
 dev:
     cargo tauri dev
 
+# Format everything
+fmt:
+    cd backend && cargo fmt
+    cd frontend && npm run format
+
 # Connect and run on an Android VM/Physical device
 dev-android:
     cargo tauri android dev
 
-[working-directory: 'backend']
 # Run a check on the backend
+[working-directory: 'backend']
 check-backend:
     cargo check
     cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
 
-[working-directory: 'frontend']
+
 # Run lint on the frontend
+[working-directory: 'frontend']
 check-frontend:
     npm run lint
 

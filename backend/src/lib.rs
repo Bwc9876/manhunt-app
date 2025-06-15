@@ -303,11 +303,13 @@ pub fn run() {
     let builder = mk_specta();
 
     tauri::Builder::default()
-        .manage(state)
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_geolocation::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(builder.invoke_handler())
+        .manage(state)
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
