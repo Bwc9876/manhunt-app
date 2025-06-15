@@ -65,6 +65,34 @@ impl AppState {
         }
     }
 
+    pub fn get_menu(&self) -> Result<&PlayerProfile> {
+        match self {
+            AppState::Menu(player_profile) => Ok(player_profile),
+            _ => Err("Not on menu screen".to_string()),
+        }
+    }
+
+    pub fn get_menu_mut(&mut self) -> Result<&mut PlayerProfile> {
+        match self {
+            AppState::Menu(player_profile) => Ok(player_profile),
+            _ => Err("Not on menu screen".to_string()),
+        }
+    }
+
+    pub fn get_lobby(&self) -> Result<Arc<Lobby>> {
+        match self {
+            AppState::Lobby(lobby) => Ok(lobby.clone()),
+            _ => Err("Not on lobby screen".to_string()),
+        }
+    }
+
+    pub fn get_game(&self) -> Result<Arc<Game>> {
+        match self {
+            AppState::Game(game) => Ok(game.clone()),
+            _ => Err("Not on game screen".to_string()),
+        }
+    }
+
     pub fn start_lobby(
         &mut self,
         join_code: Option<String>,
@@ -142,6 +170,15 @@ async fn quit_game_or_lobby(app: AppHandle, state: State<'_, AppStateHandle>) ->
 
 #[tauri::command]
 #[specta::specta]
+/// (Screen: Menu) Get the user's player profile
+async fn get_profile(state: State<'_, AppStateHandle>) -> Result<PlayerProfile> {
+    let state = state.read().await;
+    let profile = state.get_menu()?;
+    Ok(profile.clone())
+}
+
+#[tauri::command]
+#[specta::specta]
 /// (Screen: Menu) Update the player's profile and persist it
 async fn update_profile(
     new_profile: PlayerProfile,
@@ -150,12 +187,9 @@ async fn update_profile(
 ) -> Result {
     new_profile.write_to_store(&app);
     let mut state = state.write().await;
-    if let AppState::Menu(profile) = &mut *state {
-        *profile = new_profile;
-        Ok(())
-    } else {
-        Err("Profile can only be updated on Menu screen".to_string())
-    }
+    let profile = state.get_menu_mut()?;
+    *profile = new_profile;
+    Ok(())
 }
 
 #[tauri::command]
@@ -179,25 +213,17 @@ async fn start_lobby(
 #[specta::specta]
 /// (Screen: Lobby) Get the current state of the lobby, call after receiving an update event
 async fn get_lobby_state(state: State<'_, AppStateHandle>) -> Result<LobbyState> {
-    let state = state.read().await;
-    if let AppState::Lobby(lobby) = &*state {
-        Ok(lobby.clone_state().await)
-    } else {
-        Err("Must be called on Lobby screen".to_string())
-    }
+    let lobby = state.read().await.get_lobby()?;
+    Ok(lobby.clone_state().await)
 }
 
 #[tauri::command]
 #[specta::specta]
 /// (Screen: Lobby) Switch teams between seekers and hiders, returns the new [LobbyState]
 async fn switch_teams(seeker: bool, state: State<'_, AppStateHandle>) -> Result<LobbyState> {
-    let state = state.read().await;
-    if let AppState::Lobby(lobby) = &*state {
-        lobby.switch_teams(seeker).await;
-        Ok(lobby.clone_state().await)
-    } else {
-        Err("Must be called on Lobby screen".to_string())
-    }
+    let lobby = state.read().await.get_lobby()?;
+    lobby.switch_teams(seeker).await;
+    Ok(lobby.clone_state().await)
 }
 
 #[tauri::command]
@@ -208,13 +234,9 @@ async fn host_update_settings(
     settings: GameSettings,
     state: State<'_, AppStateHandle>,
 ) -> Result<LobbyState> {
-    let state = state.read().await;
-    if let AppState::Lobby(lobby) = &*state {
-        lobby.update_settings(settings).await;
-        Ok(lobby.clone_state().await)
-    } else {
-        Err("Must be called on Lobby screen".to_string())
-    }
+    let lobby = state.read().await.get_lobby()?;
+    lobby.update_settings(settings).await;
+    Ok(lobby.clone_state().await)
 }
 
 #[tauri::command]
@@ -222,13 +244,8 @@ async fn host_update_settings(
 /// (Screen: Lobby) HOST ONLY: Start the game, stops anyone else from joining and switched screen
 /// to AppScreen::Game.
 async fn host_start_game(state: State<'_, AppStateHandle>) -> Result {
-    let state = state.read().await;
-    if let AppState::Lobby(lobby) = &*state {
-        lobby.start_game().await;
-        Ok(())
-    } else {
-        Err("Must be called on Lobby screen".to_string())
-    }
+    state.read().await.get_lobby()?.start_game().await;
+    Ok(())
 }
 
 // AppScreen::Game COMMANDS
@@ -237,13 +254,9 @@ async fn host_start_game(state: State<'_, AppStateHandle>) -> Result {
 #[specta::specta]
 /// (Screen: Game) Mark this player as caught, this player will become a seeker. Returns the new game state
 async fn mark_caught(state: State<'_, AppStateHandle>) -> Result<GameState> {
-    let state = state.read().await;
-    if let AppState::Game(game) = &*state {
-        game.mark_caught().await;
-        Ok(game.clone_state().await)
-    } else {
-        Err("Must be called on Game screen".to_string())
-    }
+    let game = state.read().await.get_game()?;
+    game.mark_caught().await;
+    Ok(game.clone_state().await)
 }
 
 #[tauri::command]
@@ -251,13 +264,9 @@ async fn mark_caught(state: State<'_, AppStateHandle>) -> Result<GameState> {
 /// (Screen: Game) Grab a powerup on the map, this should be called when the user is *in range* of
 /// the powerup. Returns the new game state after rolling for the powerup
 async fn grab_powerup(state: State<'_, AppStateHandle>) -> Result<GameState> {
-    let state = state.read().await;
-    if let AppState::Game(game) = &*state {
-        game.get_powerup().await;
-        Ok(game.clone_state().await)
-    } else {
-        Err("Must be called on Game screen".to_string())
-    }
+    let game = state.read().await.get_game()?;
+    game.get_powerup().await;
+    Ok(game.clone_state().await)
 }
 
 #[tauri::command]
@@ -265,18 +274,15 @@ async fn grab_powerup(state: State<'_, AppStateHandle>) -> Result<GameState> {
 /// (Screen: Game) Use the currently held powerup in the player's held_powerup. Does nothing if the
 /// player has none. Returns the updated game state
 async fn use_powerup(state: State<'_, AppStateHandle>) -> Result<GameState> {
-    let state = state.read().await;
-    if let AppState::Game(game) = &*state {
-        game.use_powerup().await;
-        Ok(game.clone_state().await)
-    } else {
-        Err("Must be called on Game screen".to_string())
-    }
+    let game = state.read().await.get_game()?;
+    game.use_powerup().await;
+    Ok(game.clone_state().await)
 }
 
 pub fn mk_specta() -> tauri_specta::Builder {
     tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
         start_lobby,
+        get_profile,
         quit_game_or_lobby,
         get_current_screen,
         update_profile,

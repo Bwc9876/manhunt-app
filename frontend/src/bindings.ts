@@ -24,6 +24,17 @@ export const commands = {
         }
     },
     /**
+     * (Screen: Menu) Get the user's player profile
+     */
+    async getProfile(): Promise<Result<PlayerProfile, string>> {
+        try {
+            return { status: "ok", data: await TAURI_INVOKE("get_profile") };
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            else return { status: "error", error: e as any };
+        }
+    },
+    /**
      * Quit a running game or leave a lobby
      */
     async quitGameOrLobby(): Promise<Result<null, string>> {
