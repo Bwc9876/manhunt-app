@@ -1,0 +1,4 @@
+$schema: https://garnix.io/api/garnix-config-schema.json
+builds:
+  include:
+    - "checks.*"
