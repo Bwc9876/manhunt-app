@@ -18,6 +18,7 @@
       formatters = {
         "*.nix" = "alejandra .";
         "*.{js,ts,jsx,tsx,md,json}" = "prettier --write . --config frontend/.prettierrc.yaml";
+        "*.rs" = "cd backend; cargo fmt";
       };
 
       devShell = pkgs: let
