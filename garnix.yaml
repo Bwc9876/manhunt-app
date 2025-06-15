@@ -1,5 +1,5 @@
 $schema: https://garnix.io/api/garnix-config-schema.json
 builds:
-  exclude: []
-  include:
-    - "checks.x86_64-linux.*"
+    exclude: []
+    include:
+        - "checks.x86_64-linux.*"

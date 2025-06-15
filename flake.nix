@@ -15,10 +15,21 @@
       };
 
       flakelight.builtinFormatters = false;
-      formatters = pkgs: {
-        "*.nix" = "${pkgs.alejandra}/bin/alejandra .";
-        "*.{js,ts,jsx,tsx,md,json}" = "${pkgs.prettier}/bin/prettier --write . --config frontend/.prettierrc.yaml";
-        "*.rs" = "${pkgs.rustfmt}";
+      formatters = pkgs: let
+        prettier = "${pkgs.prettier}/bin/prettier --write .";
+        alejandra = "${pkgs.alejandra}/bin/alejandra .";
+        rustfmt = "${pkgs.rustfmt}/bin/rustfmt";
+        just = "${pkgs.just}/bin/just --fmt --unstable";
+      in {
+        "justfile" = just;
+        "*.nix" = alejandra;
+        "*.js" = prettier;
+        "*.ts" = prettier;
+        "*.jsx" = prettier;
+        "*.tsx" = prettier;
+        "*.md" = prettier;
+        "*.json" = prettier;
+        "*.rs" = rustfmt;
       };
 
       devShell = pkgs: let

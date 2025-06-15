@@ -1,5 +1,7 @@
 # Man Hunt
 
+[![built with garnix](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Fgarnix.io%2Fapi%2Fbadges%2FBwc9876%2Fmanhunt-app%3Fbranch%3Dmain)](https://garnix.io/repo/Bwc9876/manhunt-app)
+
 An iOS and Android app that lets you play man hunt with friends.
 
 The game is played over WebRTC Data Channels and is entirely P2P (except for the
@@ -15,10 +17,12 @@ If you have [nix](https://nixos.org) installed, all of these are handled for you
 
 - [Rust](https://rustup.rs)
 - [Just](https://just.systems) (`cargo install just`)
+    - **On Windows**: Some implementation of `sh` (Git for Windows works well)
 - [Tauri's Pre-reqs](https://tauri.app/start/prerequisites/)
-  - [(Also pre-reqs for mobile dev if you are working on the app part)](https://tauri.app/start/prerequisites/#configure-for-mobile-targets)
+    - [(Also pre-reqs for mobile dev if you are working on the app part)](https://tauri.app/start/prerequisites/#configure-for-mobile-targets)
 - Tauri's CLI (`cargo install tauri-cli`)
 - [NodeJS](https://nodejs.org)
+- [Prettier](https://prettier.io/) (`npm add -G prettier`)
 
 #### With Nix
 
@@ -34,8 +38,8 @@ You can then call the `just` recipes mentioned below.
 
 - `just dev`: Will run the app locally on your computer, this will open a
   WebView with the frontend
-  - Note: all geolocation returned from tauri-plugin-geolocation will be hard
-    coded to `(0.0, 0.0)` in this mode.
+    - Note: all geolocation returned from tauri-plugin-geolocation will be hard
+      coded to `(0.0, 0.0)` in this mode.
 - `just dev-android`: Will run the app on a connect Android device or VM via ADB
 - `just signaling`: Will run the signaling server on port `3536`
   (this is needed for clients to connect)
