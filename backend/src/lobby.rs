@@ -55,7 +55,8 @@ impl Lobby {
     ) -> Self {
         Self {
             transport: Arc::new(MatchboxTransport::new(&format!(
-                "{ws_url_base}/{join_code}"
+                "{ws_url_base}/{join_code}{}",
+                if host { "?create" } else { "" }
             ))),
             is_host: host,
             self_profile: profile,
