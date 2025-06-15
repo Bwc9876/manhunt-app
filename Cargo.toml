@@ -1,0 +1,7 @@
+[workspace]
+members = ["backend", "manhunt-signaling"]
+resolver = "3"
+
+[profile.release]
+lto = true
+strip = true

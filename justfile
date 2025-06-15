@@ -13,7 +13,7 @@ dev:
 
 # Format everything
 fmt:
-    cd backend && cargo fmt
+    cargo fmt
     cd frontend && npm run format
 
 # Connect and run on an Android VM/Physical device
@@ -38,3 +38,7 @@ export-types:
     cargo run --bin export-types ../frontend/src/bindings.ts 
     prettier --write ../frontend/src/bindings.ts
 
+# Start the signaling server on localhost:3536
+[working-directory: 'manhunt-signaling']
+signaling:
+    cargo run 127.0.0.1:3536

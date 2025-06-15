@@ -330,7 +330,10 @@ async fn main() -> Result {
         })
         .build();
 
-    info!("Starting manhunt signaling server {}", env!("CARGO_PKG_VERSION"));
+    info!(
+        "Starting manhunt signaling server {}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     server.serve().await.context("Error while running server")
 }
