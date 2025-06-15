@@ -6,11 +6,6 @@ _default:
 setup-frontend:
     npm install --no-fund --no-audit
 
-[working-directory: 'backend']
-# Perform setup to target Android in the backend
-setup-android:
-    cargo tauri android init
-
 # Run locally
 dev:
     cargo tauri dev
