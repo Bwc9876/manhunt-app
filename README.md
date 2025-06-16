@@ -22,7 +22,7 @@ If you have [nix](https://nixos.org) installed, all of these are handled for you
     - [(Also pre-reqs for mobile dev if you are working on the app part)](https://tauri.app/start/prerequisites/#configure-for-mobile-targets)
 - Tauri's CLI (`cargo install tauri-cli`)
 - [NodeJS](https://nodejs.org)
-- [Prettier](https://prettier.io/) (`npm add -G prettier`)
+- [Prettier](https://prettier.io/) (`npm add -g prettier`)
 
 #### With Nix
 

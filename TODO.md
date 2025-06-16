@@ -14,4 +14,4 @@
 - [x] Meta : CI Setup
 - [x] Meta : README Instructions
 - [x] Meta : Recipes for type binding generation
-- [x] Singaling: All of it
+- [x] Signaling: All of it
