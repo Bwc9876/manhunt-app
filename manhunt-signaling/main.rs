@@ -67,11 +67,11 @@ impl ServerState {
             .insert(origin, code.clone());
     }
 
-    pub fn room_is_open(&self, room_id: RoomId) -> bool {
+    pub fn room_is_open(&self, room_id: &RoomId) -> bool {
         self.matches
             .lock()
             .unwrap()
-            .get(&room_id)
+            .get(room_id)
             .is_some_and(|m| m.open_lobby)
     }
 
@@ -98,13 +98,7 @@ impl ServerState {
 
     /// Try to join a room by a code, returns `true` if successful
     pub fn try_join_room(&mut self, origin: SocketAddr, code: RoomId) -> bool {
-        if self
-            .matches
-            .lock()
-            .unwrap()
-            .get(&code)
-            .is_some_and(|m| m.open_lobby)
-        {
+        if self.room_is_open(&code) {
             self.waiting_clients.lock().unwrap().insert(origin, code);
             true
         } else {
@@ -306,7 +300,7 @@ async fn main() -> Result {
                     .route(
                         "/room_exists/{id}",
                         get(move |Path(room_id): Path<String>| async move {
-                            if state.room_is_open(room_id) {
+                            if state.room_is_open(&room_id) {
                                 StatusCode::OK
                             } else {
                                 StatusCode::NOT_FOUND
