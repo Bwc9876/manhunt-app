@@ -38,3 +38,6 @@ specta-typescript = "0.0.9"
 tauri-plugin-log = "2"
 tauri-plugin-notification = "2"
 log = "0.4.27"
+tokio-util = "0.7.15"
+anyhow = "1.0.98"
+reqwest = { version = "0.12.20", default-features = false, features = ["charset", "http2", "rustls-tls", "system-proxy"] }

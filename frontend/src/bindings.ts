@@ -147,16 +147,35 @@ export const commands = {
             if (e instanceof Error) throw e;
             else return { status: "error", error: e as any };
         }
+    },
+    /**
+     * (Screen: Menu) Check if a room code is valid to join, use this before starting a game
+     * for faster error checking.
+     */
+    async checkRoomCode(code: string): Promise<Result<boolean, string>> {
+        try {
+            return { status: "ok", data: await TAURI_INVOKE("check_room_code", { code }) };
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            else return { status: "error", error: e as any };
+        }
     }
 };
 
 /** user-defined events **/
+
+export const events = __makeEvents__<{
+    changeScreen: ChangeScreen;
+}>({
+    changeScreen: "change-screen"
+});
 
 /** user-defined constants **/
 
 /** user-defined types **/
 
 export type AppScreen = "Setup" | "Menu" | "Lobby" | "Game";
+export type ChangeScreen = AppScreen;
 /**
  * Settings for the game, host is the only person able to change these
  */

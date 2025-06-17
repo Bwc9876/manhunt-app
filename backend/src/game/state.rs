@@ -240,6 +240,11 @@ impl GameState {
         self.pings.get(&player)
     }
 
+    /// Check if the game should be ended (due to all players being caught)
+    pub fn should_end(&self) -> bool {
+        self.caught_state.values().all(|v| *v)
+    }
+
     /// Remove a ping from the map
     pub fn remove_ping(&mut self, player: Id) -> Option<PlayerPing> {
         self.pings.remove(&player)
@@ -281,6 +286,12 @@ impl GameState {
     /// Create a [PlayerPing] with the latest location as another player
     pub fn create_ping(&self, id: Id) -> Option<PlayerPing> {
         self.get_loc().map(|loc| PlayerPing::new(*loc, id, self.id))
+    }
+
+    /// Remove a player from the game by their ID number
+    pub fn remove_player(&mut self, id: Id) {
+        self.pings.remove(&id);
+        self.caught_state.remove(&id);
     }
 
     /// Player has gotten a powerup, rolls to see which powerup and stores it

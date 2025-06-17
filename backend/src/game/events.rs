@@ -17,4 +17,9 @@ pub enum GameEvent {
     /// Contains location history of the given player, used after the game to sync location
     /// histories
     PostGameSync(Id, Vec<Location>),
+    /// A player has been disconnected and removed from the game (because of error or otherwise).
+    /// The player should be removed from all state
+    DroppedPlayer(Id),
+    /// The underlying transport has disconnected
+    TransportDisconnect,
 }

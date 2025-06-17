@@ -1,26 +1,110 @@
-use std::{collections::HashSet, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
+use anyhow::Context;
 use futures::FutureExt;
+use log::error;
 use matchbox_socket::{PeerId, PeerState, WebRtcSocket};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
     game::{GameEvent, Transport},
     lobby::LobbyMessage,
+    prelude::*,
 };
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TransportChunk {
+    id: u64,
+    current: usize,
+    total: usize,
+    data: Vec<u8>,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum TransportMessage {
     /// Message related to the actual game
-    Game(GameEvent),
+    /// Boxed for space reasons
+    Game(Box<GameEvent>),
     /// Message related to the pre-game lobby
-    Lobby(LobbyMessage),
+    Lobby(Box<LobbyMessage>),
     /// Internal message when peer connects
     PeerConnect,
     /// Internal message when peer disconnects
     PeerDisconnect,
+    /// Event sent when the transport gets disconnected, used to help consumers know when to stop
+    /// consuming messages
+    Disconnected,
+    /// Internal message for packet chunking
+    Seq(TransportChunk),
+}
+
+// Max packet size according to: https://github.com/johanhelsing/matchbox/issues/272
+const MAX_PACKET_SIZE: usize = 65535;
+
+// Align packets with a bit of extra space for [TransportMessage::Seq] header
+const PACKET_ALIGNMENT: usize = MAX_PACKET_SIZE - 128;
+
+impl TransportMessage {
+    pub fn serialize(&self) -> Vec<u8> {
+        rmp_serde::to_vec(self).expect("Failed to encode")
+    }
+
+    pub fn deserialize(data: &[u8]) -> Result<Self> {
+        rmp_serde::from_slice(data).context("While deserializing message")
+    }
+
+    pub fn from_packets(packets: impl Iterator<Item = Box<[u8]>>) -> Result<Self> {
+        let full_data = packets.flatten().collect::<Box<[u8]>>();
+        Self::deserialize(&full_data).context("While decoding a multi-part message")
+    }
+
+    pub fn to_packets(&self) -> Vec<Vec<u8>> {
+        let bytes = self.serialize();
+        if bytes.len() > MAX_PACKET_SIZE {
+            let id = rand::random_range(0..u64::MAX);
+            let packets_needed = bytes.len().div_ceil(PACKET_ALIGNMENT);
+            let rem = bytes.len() % PACKET_ALIGNMENT;
+            let bytes = bytes.into_boxed_slice();
+            (0..packets_needed)
+                .map(|idx| {
+                    let start = PACKET_ALIGNMENT * idx;
+                    let end = if idx == packets_needed - 1 {
+                        start + rem
+                    } else {
+                        PACKET_ALIGNMENT * (idx + 1)
+                    };
+                    let data = bytes[start..end].to_vec();
+                    let chunk = TransportChunk {
+                        id,
+                        current: idx,
+                        total: packets_needed,
+                        data,
+                    };
+                    TransportMessage::Seq(chunk).serialize()
+                })
+                .collect()
+        } else {
+            vec![bytes]
+        }
+    }
+}
+
+impl From<GameEvent> for TransportMessage {
+    fn from(v: GameEvent) -> Self {
+        Self::Game(Box::new(v))
+    }
+}
+
+impl From<LobbyMessage> for TransportMessage {
+    fn from(v: LobbyMessage) -> Self {
+        Self::Lobby(Box::new(v))
+    }
 }
 
 type OutgoingMsgPair = (Option<Uuid>, TransportMessage);
@@ -59,16 +143,54 @@ impl MatchboxTransport {
             .expect("Failed to add to outgoing queue");
     }
 
-    pub async fn recv_transport_message(&self) -> Option<IncomingMsgPair> {
+    pub async fn recv_transport_messages(&self) -> Vec<IncomingMsgPair> {
         let mut incoming_rx = self.incoming.1.lock().await;
-        incoming_rx.recv().await
+        let mut buffer = Vec::with_capacity(60);
+        incoming_rx.recv_many(&mut buffer, 60).await;
+        buffer
     }
 
     pub async fn get_my_id(&self) -> Option<Uuid> {
         *self.my_id.read().await
     }
 
-    pub async fn transport_loop(&self) {
+    async fn push_incoming(&self, id: Uuid, msg: TransportMessage) {
+        self.incoming
+            .0
+            .send((id, msg))
+            .await
+            .expect("Failed to push to incoming queue");
+    }
+
+    async fn handle_send(
+        &self,
+        socket: &mut WebRtcSocket,
+        all_peers: &HashSet<PeerId>,
+        messages: impl Iterator<Item = OutgoingMsgPair>,
+    ) {
+        let packets = messages.flat_map(|(id, msg)| {
+            msg.to_packets()
+                .into_iter()
+                .map(move |packet| (id, packet.into_boxed_slice()))
+        });
+
+        for (peer, packet) in packets {
+            if let Some(peer) = peer {
+                let channel = socket.channel_mut(0);
+                channel.send(packet, PeerId(peer));
+            } else {
+                let channel = socket.channel_mut(0);
+
+                for peer in all_peers.iter() {
+                    // TODO: Any way around having to clone here?
+                    let data = packet.clone();
+                    channel.send(data, *peer);
+                }
+            }
+        }
+    }
+
+    pub async fn transport_loop(&self, cancel: CancellationToken) {
         let (mut socket, loop_fut) = WebRtcSocket::new_reliable(&self.ws_url);
 
         let loop_fut = loop_fut.fuse();
@@ -78,6 +200,9 @@ impl MatchboxTransport {
         let mut my_id = None;
 
         let mut timer = tokio::time::interval(Duration::from_millis(100));
+
+        let mut partial_packets =
+            HashMap::<u64, (Uuid, HashMap<usize, Option<Vec<u8>>>)>::with_capacity(3);
 
         loop {
             for (peer, state) in socket.update_peers() {
@@ -91,21 +216,71 @@ impl MatchboxTransport {
                         TransportMessage::PeerDisconnect
                     }
                 };
-                self.incoming
-                    .0
-                    .send((peer.0, msg))
-                    .await
-                    .expect("Failed to push to incoming queue");
+                self.push_incoming(peer.0, msg).await;
             }
 
-            for (peer, data) in socket.channel_mut(0).receive() {
-                if let Ok(msg) = rmp_serde::from_slice(&data) {
-                    self.incoming
-                        .0
-                        .send((peer.0, msg))
-                        .await
-                        .expect("Failed to push to incoming queue");
+            let messages = socket.channel_mut(0).receive();
+
+            let mut messages = messages
+                .into_iter()
+                .filter_map(|(id, data)| {
+                    let msg = TransportMessage::deserialize(&data).ok();
+
+                    if let Some(TransportMessage::Seq(TransportChunk {
+                        id: multipart_id,
+                        current,
+                        total,
+                        data,
+                    })) = msg
+                    {
+                        if let Some((_, map)) = partial_packets.get_mut(&multipart_id) {
+                            map.insert(current, Some(data));
+                        } else {
+                            let mut map = HashMap::from_iter((0..total).map(|idx| (idx, None)));
+                            map.insert(current, Some(data));
+                            partial_packets.insert(multipart_id, (id.0, map));
+                        }
+                        None
+                    } else {
+                        msg.map(|msg| (id.0, msg))
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let complete_messages = partial_packets
+                .keys()
+                .copied()
+                .filter(|id| {
+                    partial_packets
+                        .get(id)
+                        .is_some_and(|(_, v)| v.values().all(Option::is_some))
+                })
+                .collect::<Vec<_>>();
+
+            for id in complete_messages {
+                let (peer, packet_map) = partial_packets.remove(&id).unwrap();
+
+                let res = TransportMessage::from_packets(
+                    packet_map
+                        .into_values()
+                        .map(|v| v.unwrap().into_boxed_slice()),
+                );
+
+                match res {
+                    Ok(msg) => messages.push((peer, msg)),
+                    Err(why) => error!("Error receiving message: {why:?}"),
                 }
+            }
+
+            let push_iter = self
+                .incoming
+                .0
+                .reserve_many(messages.len())
+                .await
+                .expect("Couldn't reserve space");
+
+            for (sender, msg) in push_iter.zip(messages.into_iter()) {
+                sender.send(msg);
             }
 
             if my_id.is_none() {
@@ -117,32 +292,22 @@ impl MatchboxTransport {
 
             let mut outgoing_rx = self.outgoing.1.lock().await;
 
+            let mut buffer = Vec::with_capacity(30);
+
             tokio::select! {
+
+                _ = cancel.cancelled() => {
+                    socket.close();
+
+                }
+
                 _ = timer.tick() => {
                     // Transport Tick
                     continue;
                 }
 
-                Some((peer, msg)) = outgoing_rx.recv() => {
-                    let encoded = rmp_serde::to_vec(&msg).unwrap();
-
-                    if let Some(peer) = peer {
-                        let channel = socket.channel_mut(0);
-                        let data = encoded.into_boxed_slice();
-                        channel.send(data, PeerId(peer));
-                    } else {
-                        // Send to self as well
-                        if let Some(myself) = my_id {
-                            self.incoming.0.send((myself, msg)).await.expect("Failed to push to incoming queue");
-                        }
-                        let channel = socket.channel_mut(0);
-
-                        for peer in all_peers.iter() {
-                            // TODO: Any way around having to clone here?
-                            let data = encoded.clone().into_boxed_slice();
-                            channel.send(data, *peer);
-                        }
-                    }
+                _ = outgoing_rx.recv_many(&mut buffer, 30) => {
+                    self.handle_send(&mut socket, &all_peers, buffer.drain(..)).await;
                 }
 
                 _ = &mut loop_fut => {
@@ -155,17 +320,18 @@ impl MatchboxTransport {
 }
 
 impl Transport for MatchboxTransport {
-    async fn receive_message(&self) -> Option<GameEvent> {
-        self.recv_transport_message()
+    async fn receive_messages(&self) -> impl Iterator<Item = GameEvent> {
+        self.recv_transport_messages()
             .await
-            .and_then(|(_, msg)| match msg {
-                TransportMessage::Game(game_event) => Some(game_event),
+            .into_iter()
+            .filter_map(|(id, msg)| match msg {
+                TransportMessage::Game(game_event) => Some(*game_event),
+                TransportMessage::PeerDisconnect => Some(GameEvent::DroppedPlayer(id)),
                 _ => None,
             })
     }
 
     async fn send_message(&self, msg: GameEvent) {
-        let msg = TransportMessage::Game(msg);
-        self.send_transport_message(None, msg).await;
+        self.send_transport_message(None, msg.into()).await;
     }
 }

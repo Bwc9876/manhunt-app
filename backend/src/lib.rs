@@ -9,13 +9,22 @@ use std::{sync::Arc, time::Duration};
 use game::{Game as BaseGame, GameSettings, GameState};
 use lobby::{Lobby, LobbyState, StartGameInfo};
 use location::TauriLocation;
+use log::{error, warn};
 use profile::PlayerProfile;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
-use tauri_specta::collect_commands;
+use tauri_specta::{collect_commands, collect_events, Event};
 use tokio::sync::RwLock;
 use transport::MatchboxTransport;
 use uuid::Uuid;
+
+mod prelude {
+    pub use anyhow::{anyhow, bail, Error as AnyhowError};
+    pub use std::result::Result as StdResult;
+
+    pub type Result<T = (), E = AnyhowError> = StdResult<T, E>;
+}
 
 type Game = BaseGame<TauriLocation, MatchboxTransport>;
 
@@ -37,13 +46,16 @@ fn generate_join_code() -> String {
 
 const GAME_TICK_RATE: Duration = Duration::from_secs(1);
 
-const fn server_url() -> &'static str {
+pub const fn server_url() -> &'static str {
     if let Some(url) = option_env!("APP_SERVER_URL") {
         url
     } else {
         "ws://localhost:3536"
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, specta::Type, tauri_specta::Event)]
+struct ChangeScreen(AppScreen);
 
 impl AppState {
     pub fn start_game(&mut self, app: AppHandle, my_id: Uuid, start: StartGameInfo) {
@@ -57,10 +69,25 @@ impl AppState {
                 start.settings,
                 transport,
                 location,
+                lobby.clone_cancel(),
             ));
             *self = AppState::Game(game.clone());
             tokio::spawn(async move {
-                game.main_loop().await;
+                let res = game.main_loop().await;
+                let app2 = app.clone();
+                let state_handle = app.state::<AppStateHandle>();
+                let mut state = state_handle.write().await;
+                match res {
+                    Ok(_) => {
+                        // TODO: Post game screen, etc here. Game::main_loop should return smth
+                        // like GameHistory for playback and serialization
+                        state.quit_game_or_lobby(app2);
+                    }
+                    Err(why) => {
+                        error!("Game Error: {why:?}");
+                        state.quit_game_or_lobby(app2);
+                    }
+                }
             });
         }
     }
@@ -93,6 +120,12 @@ impl AppState {
         }
     }
 
+    fn emit_screen_change(app: &AppHandle, screen: AppScreen) {
+        if let Err(why) = ChangeScreen(screen).emit(app) {
+            warn!("Error emitting screen change: {why:?}");
+        }
+    }
+
     pub fn start_lobby(
         &mut self,
         join_code: Option<String>,
@@ -110,14 +143,51 @@ impl AppState {
                 settings,
             ));
             *self = AppState::Lobby(lobby.clone());
+            let app2 = app.clone();
             tokio::spawn(async move {
-                let (my_id, start) = lobby.open().await;
-                let app_game = app.clone();
-                let state_handle = app.state::<AppStateHandle>();
+                let res = lobby.open().await;
+                let app_game = app2.clone();
+                let state_handle = app2.state::<AppStateHandle>();
                 let mut state = state_handle.write().await;
-                state.start_game(app_game, my_id, start);
+                match res {
+                    Ok((my_id, start)) => {
+                        state.start_game(app_game, my_id, start);
+                    }
+                    Err(why) => {
+                        error!("Lobby Error: {why:?}");
+                        state.quit_game_or_lobby(app_game);
+                    }
+                }
             });
+            Self::emit_screen_change(&app, AppScreen::Lobby);
         }
+    }
+
+    pub fn quit_game_or_lobby(&mut self, app: AppHandle) {
+        let profile = match self {
+            AppState::Setup => None,
+            AppState::Menu(_) => {
+                warn!("Already on menu!");
+                return;
+            }
+            AppState::Lobby(lobby) => {
+                lobby.quit_lobby();
+                Some(lobby.self_profile.clone())
+            }
+            AppState::Game(game) => {
+                game.quit_game();
+                PlayerProfile::load_from_store(&app)
+            }
+        };
+        let screen = if let Some(profile) = profile {
+            *self = AppState::Menu(profile);
+            AppScreen::Menu
+        } else {
+            *self = AppState::Setup;
+            AppScreen::Setup
+        };
+
+        Self::emit_screen_change(&app, screen);
     }
 }
 
@@ -153,16 +223,7 @@ async fn get_current_screen(state: State<'_, AppStateHandle>) -> Result<AppScree
 /// Quit a running game or leave a lobby
 async fn quit_game_or_lobby(app: AppHandle, state: State<'_, AppStateHandle>) -> Result {
     let mut state = state.write().await;
-    let profile = match &*state {
-        AppState::Setup => Err("Invalid Screen".to_string()),
-        AppState::Menu(_) => Err("Already In Menu".to_string()),
-        AppState::Lobby(_) | AppState::Game(_) => Ok(PlayerProfile::load_from_store(&app)),
-    }?;
-    if let Some(profile) = profile {
-        *state = AppState::Menu(profile);
-    } else {
-        *state = AppState::Setup;
-    }
+    state.quit_game_or_lobby(app);
     Ok(())
 }
 
@@ -175,6 +236,18 @@ async fn get_profile(state: State<'_, AppStateHandle>) -> Result<PlayerProfile> 
     let state = state.read().await;
     let profile = state.get_menu()?;
     Ok(profile.clone())
+}
+
+#[tauri::command]
+#[specta::specta]
+/// (Screen: Menu) Check if a room code is valid to join, use this before starting a game
+/// for faster error checking.
+async fn check_room_code(code: &str) -> Result<bool, String> {
+    let url = format!("{}/room_exists/{code}", server_url());
+    reqwest::get(url)
+        .await
+        .map(|resp| resp.status() == StatusCode::OK)
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -280,20 +353,23 @@ async fn use_powerup(state: State<'_, AppStateHandle>) -> Result<GameState> {
 }
 
 pub fn mk_specta() -> tauri_specta::Builder {
-    tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
-        start_lobby,
-        get_profile,
-        quit_game_or_lobby,
-        get_current_screen,
-        update_profile,
-        get_lobby_state,
-        host_update_settings,
-        switch_teams,
-        host_start_game,
-        mark_caught,
-        grab_powerup,
-        use_powerup,
-    ])
+    tauri_specta::Builder::<tauri::Wry>::new()
+        .commands(collect_commands![
+            start_lobby,
+            get_profile,
+            quit_game_or_lobby,
+            get_current_screen,
+            update_profile,
+            get_lobby_state,
+            host_update_settings,
+            switch_teams,
+            host_start_game,
+            mark_caught,
+            grab_powerup,
+            use_powerup,
+            check_room_code,
+        ])
+        .events(collect_events![ChangeScreen])
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -310,7 +386,9 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(builder.invoke_handler())
         .manage(state)
-        .setup(|app| {
+        .setup(move |app| {
+            builder.mount_events(app);
+
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Some(profile) = PlayerProfile::load_from_store(&handle) {

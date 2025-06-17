@@ -4,7 +4,7 @@ use axum::{
     extract::{Path, ws::Message},
     http::StatusCode,
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
 };
 use futures::StreamExt;
 use log::{debug, error, info, warn};
@@ -309,7 +309,7 @@ async fn main() -> Result {
                     )
                     .route(
                         "/mark_started/{id}",
-                        get(move |Path(room_id): Path<String>| async move {
+                        post(move |Path(room_id): Path<String>| async move {
                             state2.mark_started(&room_id);
                             StatusCode::OK
                         }),

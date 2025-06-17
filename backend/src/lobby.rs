@@ -1,12 +1,16 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use log::warn;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
     game::GameSettings,
+    prelude::*,
     profile::PlayerProfile,
+    server_url,
     transport::{MatchboxTransport, TransportMessage},
 };
 
@@ -40,9 +44,11 @@ pub struct LobbyState {
 
 pub struct Lobby {
     is_host: bool,
+    join_code: String,
     pub self_profile: PlayerProfile,
     state: Mutex<LobbyState>,
     transport: Arc<MatchboxTransport>,
+    cancel_token: CancellationToken,
 }
 
 impl Lobby {
@@ -53,13 +59,16 @@ impl Lobby {
         profile: PlayerProfile,
         settings: GameSettings,
     ) -> Self {
+        let cancel_token = CancellationToken::new();
         Self {
             transport: Arc::new(MatchboxTransport::new(&format!(
                 "{ws_url_base}/{join_code}{}",
                 if host { "?create" } else { "" }
             ))),
+            cancel_token,
             is_host: host,
             self_profile: profile,
+            join_code: join_code.to_string(),
             state: Mutex::new(LobbyState {
                 teams: HashMap::with_capacity(5),
                 join_code: join_code.to_string(),
@@ -84,10 +93,7 @@ impl Lobby {
         state.self_seeker = seeker;
         drop(state);
         self.transport
-            .send_transport_message(
-                None,
-                TransportMessage::Lobby(LobbyMessage::PlayerSwitch(seeker)),
-            )
+            .send_transport_message(None, LobbyMessage::PlayerSwitch(seeker).into())
             .await;
     }
 
@@ -97,9 +103,20 @@ impl Lobby {
             let mut state = self.state.lock().await;
             state.settings = new_settings.clone();
             drop(state);
-            let msg = TransportMessage::Lobby(LobbyMessage::HostPush(new_settings));
-            self.transport.send_transport_message(None, msg).await;
+            let msg = LobbyMessage::HostPush(new_settings);
+            self.send_transport_message(None, msg).await;
         }
+    }
+
+    async fn send_transport_message(&self, id: Option<Uuid>, msg: LobbyMessage) {
+        self.transport.send_transport_message(id, msg.into()).await
+    }
+
+    async fn singaling_mark_started(&self) -> Result {
+        let url = format!("{}/mark_started/{}", server_url(), &self.join_code);
+        let client = reqwest::Client::builder().build()?;
+        client.post(url).send().await?.error_for_status()?;
+        Ok(())
     }
 
     /// (Host) Start the game
@@ -113,23 +130,49 @@ impl Lobby {
                     settings: state.settings.clone(),
                     initial_caught_state: state.teams.clone(),
                 };
-                let msg = TransportMessage::Lobby(LobbyMessage::StartGame(start_game_info));
-                self.transport.send_transport_message(None, msg).await;
+                drop(state);
+                let msg = LobbyMessage::StartGame(start_game_info);
+                self.send_transport_message(None, msg).await;
+                if let Err(why) = self.singaling_mark_started().await {
+                    warn!("Failed to tell signalling server that the match started: {why:?}");
+                }
             }
         }
     }
 
-    pub async fn open(&self) -> (Uuid, StartGameInfo) {
-        let transport_inner = self.transport.clone();
-        tokio::spawn(async move { transport_inner.transport_loop().await });
+    pub fn clone_cancel(&self) -> CancellationToken {
+        self.cancel_token.clone()
+    }
 
-        loop {
-            if let Some((peer, msg)) = self.transport.recv_transport_message().await {
+    pub fn quit_lobby(&self) {
+        self.cancel_token.cancel();
+    }
+
+    pub async fn open(&self) -> Result<(Uuid, StartGameInfo)> {
+        let transport_inner = self.transport.clone();
+        tokio::spawn({
+            let cancel = self.cancel_token.clone();
+            async move { transport_inner.transport_loop(cancel).await }
+        });
+
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+
+        let res = 'lobby: loop {
+            interval.tick().await;
+
+            let msgs = self.transport.recv_transport_messages().await;
+
+            for (peer, msg) in msgs {
                 match msg {
+                    TransportMessage::Disconnected => {
+                        break 'lobby Err(anyhow!(
+                            "Transport disconnected before lobby could start game"
+                        ));
+                    }
                     TransportMessage::Game(game_event) => {
                         eprintln!("Peer {peer:?} sent a GameEvent: {game_event:?}");
                     }
-                    TransportMessage::Lobby(lobby_message) => match lobby_message {
+                    TransportMessage::Lobby(lobby_message) => match *lobby_message {
                         LobbyMessage::PlayerSync(player_profile) => {
                             let mut state = self.state.lock().await;
                             state.profiles.insert(peer, player_profile);
@@ -139,13 +182,13 @@ impl Lobby {
                             state.settings = game_settings;
                         }
                         LobbyMessage::StartGame(start_game_info) => {
-                            break (
+                            break 'lobby Ok((
                                 self.transport
                                     .get_my_id()
                                     .await
                                     .expect("Error getting self ID"),
                                 start_game_info,
-                            );
+                            ));
                         }
                         LobbyMessage::PlayerSwitch(seeker) => {
                             let mut state = self.state.lock().await;
@@ -157,14 +200,12 @@ impl Lobby {
                         let mut state = self.state.lock().await;
                         state.teams.insert(peer, false);
                         drop(state);
-                        let msg = TransportMessage::Lobby(msg);
-                        self.transport.send_transport_message(Some(peer), msg).await;
+                        self.send_transport_message(Some(peer), msg).await;
                         if self.is_host {
                             let state = self.state.lock().await;
                             let msg = LobbyMessage::HostPush(state.settings.clone());
                             drop(state);
-                            let msg = TransportMessage::Lobby(msg);
-                            self.transport.send_transport_message(Some(peer), msg).await;
+                            self.send_transport_message(Some(peer), msg).await;
                         }
                     }
                     TransportMessage::PeerDisconnect => {
@@ -172,8 +213,15 @@ impl Lobby {
                         state.profiles.remove(&peer);
                         state.teams.remove(&peer);
                     }
+                    TransportMessage::Seq(_) => {}
                 }
             }
+        };
+
+        if res.is_err() {
+            self.cancel_token.cancel();
         }
+
+        res
     }
 }

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
-#[derive(Clone, Debug, Serialize, Deserialize, specta::Type)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, specta::Type)]
 pub struct PlayerProfile {
     display_name: String,
     pfp_base64: Option<String>,

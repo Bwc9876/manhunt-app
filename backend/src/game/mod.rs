@@ -3,6 +3,7 @@ pub use events::GameEvent;
 use powerups::PowerUpType;
 pub use settings::GameSettings;
 use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use tokio::{sync::RwLock, time::MissedTickBehavior};
@@ -13,6 +14,8 @@ mod powerups;
 mod settings;
 mod state;
 mod transport;
+
+use crate::prelude::*;
 
 pub use location::{Location, LocationService};
 pub use state::GameState;
@@ -31,6 +34,7 @@ pub struct Game<L: LocationService, T: Transport> {
     transport: Arc<T>,
     location: L,
     interval: Duration,
+    transport_cancel_token: CancellationToken,
 }
 
 impl<L: LocationService, T: Transport> Game<L, T> {
@@ -41,11 +45,13 @@ impl<L: LocationService, T: Transport> Game<L, T> {
         settings: GameSettings,
         transport: Arc<T>,
         location: L,
+        transport_cancel_token: CancellationToken,
     ) -> Self {
         let state = GameState::new(settings, my_id, initial_caught_state);
 
         Self {
             transport,
+            transport_cancel_token,
             location,
             interval,
             state: RwLock::new(state),
@@ -104,14 +110,12 @@ impl<L: LocationService, T: Transport> Game<L, T> {
         }
     }
 
-    async fn consume_event(&self, event: GameEvent) {
-        let mut state = self.state.write().await;
-
+    async fn consume_event(&self, state: &mut GameState, event: GameEvent) -> Result {
         match event {
             GameEvent::Ping(player_ping) => state.add_ping(player_ping),
             GameEvent::ForcePing(target, display) => {
                 if target != state.id {
-                    return;
+                    return Ok(());
                 }
 
                 let ping = if let Some(display) = display {
@@ -130,14 +134,20 @@ impl<L: LocationService, T: Transport> Game<L, T> {
                 state.mark_caught(player);
                 state.remove_ping(player);
             }
+            GameEvent::DroppedPlayer(id) => {
+                state.remove_player(id);
+            }
+            GameEvent::TransportDisconnect => {
+                bail!("Transport disconnected");
+            }
             GameEvent::PostGameSync(_, _locations) => {}
         }
+
+        Ok(())
     }
 
     /// Perform a tick for a specific moment in time
-    async fn tick(&self, now: UtcDT) {
-        let mut state = self.state.write().await;
-
+    async fn tick(&self, state: &mut GameState, now: UtcDT) {
         // Push to location history
         if let Some(location) = self.location.get_loc() {
             state.push_loc(location);
@@ -186,31 +196,47 @@ impl<L: LocationService, T: Transport> Game<L, T> {
 
     #[cfg(test)]
     pub async fn force_tick(&self, now: UtcDT) {
-        self.tick(now).await;
+        let mut state = self.state.write().await;
+        self.tick(&mut state, now).await;
+    }
+
+    pub fn quit_game(&self) {
+        self.transport_cancel_token.cancel();
     }
 
     /// Main loop of the game, handles ticking and receiving messages from [Transport].
-    pub async fn main_loop(&self) {
+    pub async fn main_loop(&self) -> Result {
         let mut interval = tokio::time::interval(self.interval);
 
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        loop {
+        let res = 'game: loop {
             tokio::select! {
-
                 biased;
 
-                Some(msg) = self.transport.receive_message() => {
-                    self.consume_event(msg).await;
-                    // TODO: Check all caught, end game
+                events = self.transport.receive_messages() => {
+                    let mut state = self.state.write().await;
+                    for event in events {
+                        if let Err(why) = self.consume_event(&mut state, event).await {
+                            break 'game Err(why);
+                        }
+                    }
+
+                    if state.should_end() {
+                        break Ok(());
+                    }
                 }
 
                 _ = interval.tick() => {
-                    let now = Utc::now();
-                    self.tick(now).await;
+                    let mut state = self.state.write().await;
+                    self.tick(&mut state, Utc::now()).await;
                 }
-            };
-        }
+            }
+        };
+
+        self.transport_cancel_token.cancel();
+
+        res
     }
 }
 
@@ -232,9 +258,11 @@ mod tests {
     }
 
     impl Transport for MockTransport {
-        async fn receive_message(&self) -> Option<GameEvent> {
+        async fn receive_messages(&self) -> impl Iterator<Item = GameEvent> {
             let mut rx = self.rx.lock().await;
-            rx.recv().await
+            let mut buf = Vec::with_capacity(20);
+            rx.recv_many(&mut buf, 20).await;
+            buf.into_iter()
         }
 
         async fn send_message(&self, msg: GameEvent) {
@@ -301,6 +329,7 @@ mod tests {
                         settings.clone(),
                         Arc::new(transport),
                         location,
+                        CancellationToken::new(),
                     );
 
                     (id as u32, Arc::new(game))
@@ -319,7 +348,7 @@ mod tests {
             for game in self.games.values() {
                 let game = game.clone();
                 tokio::spawn(async move {
-                    game.main_loop().await;
+                    game.main_loop().await.expect("Game Start Fail");
                 });
                 yield_now().await;
             }
