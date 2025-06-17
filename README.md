@@ -60,8 +60,8 @@ You can then call the `just` recipes mentioned below.
 As you go, please run these `just` commands every-so-often and before you commit:
 
 - `just fmt`: Formats all files in the repo
-- `just check-backend`: Check (and fix) potential issues on the backend
-  (only need to run if you edited the backend)
+- `just check-rust`: Check (and fix) potential issues with Rust code
+  (only need to run if you edited the backend or signaling)
 - `just check-frontend`: Check for potential issues on the frontend
   (only need to run if you edited the frontend)
 - `just check-signaling`: Same thing as backend but for the singaling server

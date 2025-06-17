@@ -21,14 +21,7 @@ dev-android:
     cargo tauri android dev
 
 # Run a check on the backend
-[working-directory('backend')]
-check-backend:
-    cargo fmt --check
-    cargo check
-    cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
-
-[working-directory('manhunt-signaling')]
-check-signaling:
+check-rust:
     cargo fmt --check
     cargo check
     cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
