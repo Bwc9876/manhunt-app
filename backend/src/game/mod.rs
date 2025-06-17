@@ -3,7 +3,6 @@ pub use events::GameEvent;
 use powerups::PowerUpType;
 pub use settings::GameSettings;
 use std::{collections::HashMap, sync::Arc, time::Duration};
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use tokio::{sync::RwLock, time::MissedTickBehavior};
@@ -18,7 +17,7 @@ mod transport;
 use crate::prelude::*;
 
 pub use location::{Location, LocationService};
-pub use state::{GameHistory, GameState};
+pub use state::{GameHistory, GameState, GameUiState};
 pub use transport::Transport;
 
 pub type Id = Uuid;
@@ -26,18 +25,22 @@ pub type Id = Uuid;
 /// Convenence alias for UTC DT
 pub type UtcDT = DateTime<Utc>;
 
+pub trait StateUpdateSender {
+    fn send_update(&self);
+}
+
 /// Struct representing an ongoing game, handles communication with
 /// other clients via [Transport], gets location with [LocationService], and provides high-level methods for
 /// taking actions in the game.
-pub struct Game<L: LocationService, T: Transport> {
+pub struct Game<L: LocationService, T: Transport, S: StateUpdateSender> {
     state: RwLock<GameState>,
     transport: Arc<T>,
     location: L,
+    state_update_sender: S,
     interval: Duration,
-    transport_cancel_token: CancellationToken,
 }
 
-impl<L: LocationService, T: Transport> Game<L, T> {
+impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
     pub fn new(
         my_id: Id,
         interval: Duration,
@@ -45,16 +48,16 @@ impl<L: LocationService, T: Transport> Game<L, T> {
         settings: GameSettings,
         transport: Arc<T>,
         location: L,
-        transport_cancel_token: CancellationToken,
+        state_update_sender: S,
     ) -> Self {
         let state = GameState::new(settings, my_id, initial_caught_state);
 
         Self {
             transport,
-            transport_cancel_token,
             location,
             interval,
             state: RwLock::new(state),
+            state_update_sender,
         }
     }
 
@@ -69,6 +72,14 @@ impl<L: LocationService, T: Transport> Game<L, T> {
         self.transport
             .send_message(GameEvent::PlayerCaught(state.id))
             .await;
+    }
+
+    pub async fn clone_settings(&self) -> GameSettings {
+        self.state.read().await.clone_settings()
+    }
+
+    pub async fn get_ui_state(&self) -> GameUiState {
+        self.state.read().await.as_ui_state()
     }
 
     pub async fn get_powerup(&self) {
@@ -145,22 +156,29 @@ impl<L: LocationService, T: Transport> Game<L, T> {
             }
         }
 
+        self.state_update_sender.send_update();
+
         Ok(())
     }
 
     /// Perform a tick for a specific moment in time
     /// Returns whether the game loop should be broken.
     async fn tick(&self, state: &mut GameState, now: UtcDT) -> bool {
+        let mut send_update = false;
+
         if state.check_end_game() {
             // If we're at the point where the game is over, send out our location history
             let msg = GameEvent::PostGameSync(state.id, state.location_history.clone());
             self.transport.send_message(msg).await;
+            send_update = true;
         }
 
         if state.game_ended() {
             // Don't do normal ticks if the game is over,
             // simply return if we're done doing a post-game sync
-
+            if send_update {
+                self.state_update_sender.send_update();
+            }
             return state.check_post_game_sync();
         }
 
@@ -172,11 +190,13 @@ impl<L: LocationService, T: Transport> Game<L, T> {
         // Release Seekers?
         if !state.seekers_released() && state.should_release_seekers(now) {
             state.release_seekers(now);
+            send_update = true;
         }
 
         // Start Pings?
         if !state.pings_started() && state.should_start_pings(now) {
             state.start_pings(now);
+            send_update = true;
         }
 
         // Do a Ping?
@@ -202,11 +222,18 @@ impl<L: LocationService, T: Transport> Game<L, T> {
         // Start Powerup Rolls?
         if !state.powerups_started() && state.should_start_powerups(now) {
             state.start_powerups(now);
+            send_update = true;
         }
 
         // Should roll for a powerup?
         if state.should_spawn_powerup(&now) {
             state.try_spawn_powerup(now);
+            send_update = true;
+        }
+
+        // Send a state update to the UI?
+        if send_update {
+            self.state_update_sender.send_update();
         }
 
         false
@@ -219,7 +246,7 @@ impl<L: LocationService, T: Transport> Game<L, T> {
     }
 
     pub fn quit_game(&self) {
-        self.transport_cancel_token.cancel();
+        self.transport.disconnect();
     }
 
     /// Main loop of the game, handles ticking and receiving messages from [Transport].
@@ -253,7 +280,7 @@ impl<L: LocationService, T: Transport> Game<L, T> {
             }
         };
 
-        self.transport_cancel_token.cancel();
+        self.transport.disconnect();
 
         res
     }
@@ -303,7 +330,13 @@ mod tests {
         }
     }
 
-    type TestGame = Game<MockLocation, MockTransport>;
+    struct DummySender;
+
+    impl StateUpdateSender for DummySender {
+        fn send_update(&self) {}
+    }
+
+    type TestGame = Game<MockLocation, MockTransport, DummySender>;
 
     struct MockMatch {
         uuids: Vec<Uuid>,
@@ -348,7 +381,7 @@ mod tests {
                         settings.clone(),
                         Arc::new(transport),
                         location,
-                        CancellationToken::new(),
+                        DummySender,
                     );
 
                     (id as u32, Arc::new(game))

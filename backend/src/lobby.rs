@@ -1,9 +1,10 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use log::warn;
+use log::{error, warn};
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
+use tauri_specta::Event;
 use tokio::sync::Mutex;
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
@@ -48,8 +49,13 @@ pub struct Lobby {
     pub self_profile: PlayerProfile,
     state: Mutex<LobbyState>,
     transport: Arc<MatchboxTransport>,
-    cancel_token: CancellationToken,
+    app: AppHandle,
 }
+
+/// The lobby state has updated in some way, you're expected to call [get_lobby_state] after
+/// receiving this
+#[derive(Serialize, Deserialize, Clone, Debug, specta::Type, tauri_specta::Event)]
+pub struct LobbyStateUpdate;
 
 impl Lobby {
     pub fn new(
@@ -58,14 +64,14 @@ impl Lobby {
         host: bool,
         profile: PlayerProfile,
         settings: GameSettings,
+        app: AppHandle,
     ) -> Self {
-        let cancel_token = CancellationToken::new();
         Self {
+            app,
             transport: Arc::new(MatchboxTransport::new(&format!(
                 "{ws_url_base}/{join_code}{}",
                 if host { "?create" } else { "" }
             ))),
-            cancel_token,
             is_host: host,
             self_profile: profile,
             join_code: join_code.to_string(),
@@ -76,6 +82,12 @@ impl Lobby {
                 self_seeker: false,
                 settings,
             }),
+        }
+    }
+
+    fn emit_state_update(&self) {
+        if let Err(why) = LobbyStateUpdate.emit(&self.app) {
+            error!("Error emitting Lobby state update: {why:?}");
         }
     }
 
@@ -100,6 +112,7 @@ impl Lobby {
         self.transport
             .send_transport_message(None, LobbyMessage::PlayerSwitch(seeker).into())
             .await;
+        self.emit_state_update();
     }
 
     /// (Host) Update game settings
@@ -110,6 +123,7 @@ impl Lobby {
             drop(state);
             let msg = LobbyMessage::HostPush(new_settings);
             self.send_transport_message(None, msg).await;
+            self.emit_state_update();
         }
     }
 
@@ -141,28 +155,24 @@ impl Lobby {
                 if let Err(why) = self.singaling_mark_started().await {
                     warn!("Failed to tell signalling server that the match started: {why:?}");
                 }
+                self.emit_state_update();
             }
         }
     }
 
-    pub fn clone_cancel(&self) -> CancellationToken {
-        self.cancel_token.clone()
-    }
-
     pub fn quit_lobby(&self) {
-        self.cancel_token.cancel();
+        self.transport.cancel();
     }
 
     pub async fn open(&self) -> Result<(Uuid, StartGameInfo)> {
         let transport_inner = self.transport.clone();
-        tokio::spawn({
-            let cancel = self.cancel_token.clone();
-            async move { transport_inner.transport_loop(cancel).await }
-        });
+        tokio::spawn(async move { transport_inner.transport_loop().await });
 
         let mut interval = tokio::time::interval(Duration::from_secs(1));
 
         let res = 'lobby: loop {
+            self.emit_state_update();
+
             interval.tick().await;
 
             let msgs = self.transport.recv_transport_messages().await;
@@ -224,7 +234,7 @@ impl Lobby {
         };
 
         if res.is_err() {
-            self.cancel_token.cancel();
+            self.transport.cancel();
         }
 
         res

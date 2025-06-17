@@ -11,7 +11,7 @@
 - [x] State : Event history tracking
 - [x] State : Post game sync
 - [x] API : Handling Profile Syncing
-- [ ] API : State Update Events
+- [x] API : State Update Events
 - [x] API : Game Replay Screen
 - [ ] Frontend : Scaffolding
 - [x] Meta : CI Setup

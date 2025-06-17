@@ -161,7 +161,9 @@ export const commands = {
         }
     },
     /**
-     * (Screen: Game) Get all player profiles with display names and profile pictures for this game
+     * (Screen: Game) Get all player profiles with display names and profile pictures for this game.
+     * This value will never change and is fairly expensive to clone, so please minimize calls to
+     * this command.
      */
     async getProfiles(): Promise<Result<Partial<{ [key in string]: PlayerProfile }>, string>> {
         try {
@@ -205,6 +207,28 @@ export const commands = {
             if (e instanceof Error) throw e;
             else return { status: "error", error: e as any };
         }
+    },
+    /**
+     * (Screen: Game) Get the current settings for this game.
+     */
+    async getGameSettings(): Promise<Result<GameSettings, string>> {
+        try {
+            return { status: "ok", data: await TAURI_INVOKE("get_game_settings") };
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            else return { status: "error", error: e as any };
+        }
+    },
+    /**
+     * (Screen: Game) Get the current state of the game.
+     */
+    async getGameState(): Promise<Result<GameUiState, string>> {
+        try {
+            return { status: "ok", data: await TAURI_INVOKE("get_game_state") };
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            else return { status: "error", error: e as any };
+        }
     }
 };
 
@@ -212,8 +236,12 @@ export const commands = {
 
 export const events = __makeEvents__<{
     changeScreen: ChangeScreen;
+    gameStateUpdate: GameStateUpdate;
+    lobbyStateUpdate: LobbyStateUpdate;
 }>({
-    changeScreen: "change-screen"
+    changeScreen: "change-screen",
+    gameStateUpdate: "game-state-update",
+    lobbyStateUpdate: "lobby-state-update"
 });
 
 /** user-defined constants **/
@@ -225,6 +253,9 @@ export type AppGameHistory = {
     profiles: Partial<{ [key in string]: PlayerProfile }>;
 };
 export type AppScreen = "Setup" | "Menu" | "Lobby" | "Game" | "Replay";
+/**
+ * The app is changing screens, contains the screen it's switching to
+ */
 export type ChangeScreen = AppScreen;
 /**
  * An event used between players to update state
@@ -306,6 +337,48 @@ export type GameSettings = {
      */
     powerup_locations: Location[];
 };
+/**
+ * The state of the game has updated in some way, you're expected to call [get_game_state] when
+ * receiving this
+ */
+export type GameStateUpdate = null;
+/**
+ * Subset of [GameState] that is meant to be sent to a UI frontend
+ */
+export type GameUiState = {
+    /**
+     * ID of the local player
+     */
+    my_id: string;
+    /**
+     * A map of player IDs to whether that player is a seeker
+     */
+    caught_state: Partial<{ [key in string]: boolean }>;
+    /**
+     * A powerup that is available on the map
+     */
+    available_powerup: Location | null;
+    /**
+     * A map of player IDs to an active ping on them
+     */
+    pings: Partial<{ [key in string]: PlayerPing }>;
+    /**
+     * When the game was started **in UTC**
+     */
+    game_started: string;
+    /**
+     * The last time all hiders were pinged **in UTC**
+     */
+    last_global_ping: string | null;
+    /**
+     * The [PowerUpType] the local player is holding
+     */
+    held_powerup: PowerUpType | null;
+    /**
+     * When the seekers were allowed to start **in UTC**
+     */
+    seekers_started: string | null;
+};
 export type LobbyState = {
     profiles: Partial<{ [key in string]: PlayerProfile }>;
     join_code: string;
@@ -316,6 +389,11 @@ export type LobbyState = {
     self_seeker: boolean;
     settings: GameSettings;
 };
+/**
+ * The lobby state has updated in some way, you're expected to call [get_lobby_state] after
+ * receiving this
+ */
+export type LobbyStateUpdate = null;
 /**
  * Some location in the world as gotten from a Geolocation API
  */
@@ -371,6 +449,22 @@ export type PlayerPing = {
     real_player: string;
 };
 export type PlayerProfile = { display_name: string; pfp_base64: string | null };
+/**
+ * Type of powerup
+ */
+export type PowerUpType =
+    /**
+     * Ping a random seeker instead of a hider
+     */
+    | "PingSeeker"
+    /**
+     * Pings all seekers locations on the map for hiders
+     */
+    | "PingAllSeekers"
+    /**
+     * Ping another random hider instantly
+     */
+    | "ForcePingOther";
 
 /** tauri-specta globals **/
 

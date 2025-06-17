@@ -30,7 +30,7 @@ mod prelude {
 
 use prelude::*;
 
-type Game = BaseGame<TauriLocation, MatchboxTransport>;
+type Game = BaseGame<TauriLocation, MatchboxTransport, TauriStateUpdateSender>;
 
 enum AppState {
     Setup,
@@ -68,8 +68,24 @@ pub const fn server_url() -> &'static str {
     }
 }
 
+/// The app is changing screens, contains the screen it's switching to
 #[derive(Serialize, Deserialize, Clone, Debug, specta::Type, tauri_specta::Event)]
 struct ChangeScreen(AppScreen);
+
+/// The state of the game has updated in some way, you're expected to call [get_game_state] when
+/// receiving this
+#[derive(Serialize, Deserialize, Clone, Debug, specta::Type, tauri_specta::Event)]
+struct GameStateUpdate;
+
+struct TauriStateUpdateSender(AppHandle);
+
+impl StateUpdateSender for TauriStateUpdateSender {
+    fn send_update(&self) {
+        if let Err(why) = GameStateUpdate.emit(&self.0) {
+            error!("Error sending Game state update to UI: {why:?}");
+        }
+    }
+}
 
 impl AppState {
     pub async fn start_game(&mut self, app: AppHandle, my_id: Uuid, start: StartGameInfo) {
@@ -77,6 +93,7 @@ impl AppState {
             let transport = lobby.clone_transport();
             let profiles = lobby.clone_profiles().await;
             let location = TauriLocation::new(app.clone());
+            let state_updates = TauriStateUpdateSender(app.clone());
             let game = Arc::new(Game::new(
                 my_id,
                 GAME_TICK_RATE,
@@ -84,7 +101,7 @@ impl AppState {
                 start.settings,
                 transport,
                 location,
-                lobby.clone_cancel(),
+                state_updates,
             ));
             *self = AppState::Game(game.clone(), profiles.clone());
             tokio::spawn(async move {
@@ -189,6 +206,7 @@ impl AppState {
                 host,
                 profile.clone(),
                 settings,
+                app.clone(),
             ));
             *self = AppState::Lobby(lobby.clone());
             let app2 = app.clone();
@@ -242,7 +260,7 @@ impl AppState {
 
 use std::result::Result as StdResult;
 
-use crate::game::UtcDT;
+use crate::game::{GameUiState, StateUpdateSender, UtcDT};
 
 type Result<T = (), E = String> = StdResult<T, E>;
 
@@ -382,9 +400,25 @@ async fn host_start_game(state: State<'_, AppStateHandle>) -> Result {
 
 #[tauri::command]
 #[specta::specta]
-/// (Screen: Game) Get all player profiles with display names and profile pictures for this game
+/// (Screen: Game) Get all player profiles with display names and profile pictures for this game.
+/// This value will never change and is fairly expensive to clone, so please minimize calls to
+/// this command.
 async fn get_profiles(state: State<'_, AppStateHandle>) -> Result<HashMap<Uuid, PlayerProfile>> {
     state.read().await.get_profiles().cloned()
+}
+
+#[tauri::command]
+#[specta::specta]
+/// (Screen: Game) Get the current settings for this game.
+async fn get_game_settings(state: State<'_, AppStateHandle>) -> Result<GameSettings> {
+    Ok(state.read().await.get_game()?.clone_settings().await)
+}
+
+#[tauri::command]
+#[specta::specta]
+/// (Screen: Game) Get the current state of the game.
+async fn get_game_state(state: State<'_, AppStateHandle>) -> Result<GameUiState> {
+    Ok(state.read().await.get_game()?.get_ui_state().await)
 }
 
 #[tauri::command]
@@ -445,9 +479,15 @@ pub fn mk_specta() -> tauri_specta::Builder {
             get_profiles,
             replay_game,
             list_game_histories,
-            get_current_replay_history
+            get_current_replay_history,
+            get_game_settings,
+            get_game_state,
         ])
-        .events(collect_events![ChangeScreen])
+        .events(collect_events![
+            ChangeScreen,
+            GameStateUpdate,
+            lobby::LobbyStateUpdate
+        ])
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

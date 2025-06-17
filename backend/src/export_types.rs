@@ -10,5 +10,5 @@ pub fn main() {
     let mut lang = Typescript::new();
     lang.header = Cow::Borrowed("/* eslint @typescript-eslint/no-unused-vars: 0 */\n/* eslint @typescript-eslint/no-explicit-any: 0 */");
     specta.export(lang, path).expect("Failed to export types");
-    println!("Successfully exported type and commands to {path}",);
+    println!("Successfully exported types, events, and commands to {path}",);
 }

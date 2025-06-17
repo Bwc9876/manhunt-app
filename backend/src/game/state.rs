@@ -387,6 +387,23 @@ impl GameState {
             game_ended: self.game_ended.unwrap_or_default(),
         }
     }
+
+    pub fn as_ui_state(&self) -> GameUiState {
+        GameUiState {
+            my_id: self.id,
+            caught_state: self.caught_state.clone(),
+            available_powerup: self.available_powerup,
+            pings: self.pings.clone(),
+            game_started: self.game_started,
+            last_global_ping: self.last_global_ping,
+            held_powerup: self.held_powerup,
+            seekers_started: self.seekers_started,
+        }
+    }
+
+    pub fn clone_settings(&self) -> GameSettings {
+        self.settings.clone()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -396,4 +413,25 @@ pub struct GameHistory {
     game_ended: UtcDT,
     events: Vec<(UtcDT, GameEvent)>,
     locations: Vec<(Uuid, Vec<(UtcDT, Location)>)>,
+}
+
+/// Subset of [GameState] that is meant to be sent to a UI frontend
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct GameUiState {
+    /// ID of the local player
+    my_id: Uuid,
+    /// A map of player IDs to whether that player is a seeker
+    caught_state: HashMap<Uuid, bool>,
+    /// A powerup that is available on the map
+    available_powerup: Option<Location>,
+    /// A map of player IDs to an active ping on them
+    pings: HashMap<Uuid, PlayerPing>,
+    /// When the game was started **in UTC**
+    game_started: UtcDT,
+    /// The last time all hiders were pinged **in UTC**
+    last_global_ping: Option<UtcDT>,
+    /// The [PowerUpType] the local player is holding
+    held_powerup: Option<PowerUpType>,
+    /// When the seekers were allowed to start **in UTC**
+    seekers_started: Option<UtcDT>,
 }

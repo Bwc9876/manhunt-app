@@ -120,6 +120,7 @@ pub struct MatchboxTransport {
     incoming: (IncomingQueueSender, Mutex<IncomingQueueReceiver>),
     outgoing: (OutgoingQueueSender, Mutex<OutgoingQueueReceiver>),
     my_id: RwLock<Option<Uuid>>,
+    cancel_token: CancellationToken,
 }
 
 impl MatchboxTransport {
@@ -132,6 +133,7 @@ impl MatchboxTransport {
             incoming: (itx, Mutex::new(irx)),
             outgoing: (otx, Mutex::new(orx)),
             my_id: RwLock::new(None),
+            cancel_token: CancellationToken::new(),
         }
     }
 
@@ -190,7 +192,11 @@ impl MatchboxTransport {
         }
     }
 
-    pub async fn transport_loop(&self, cancel: CancellationToken) {
+    pub fn cancel(&self) {
+        self.cancel_token.cancel();
+    }
+
+    pub async fn transport_loop(&self) {
         let (mut socket, loop_fut) = WebRtcSocket::new_reliable(&self.ws_url);
 
         let loop_fut = loop_fut.fuse();
@@ -296,7 +302,7 @@ impl MatchboxTransport {
 
             tokio::select! {
 
-                _ = cancel.cancelled() => {
+                _ = self.cancel_token.cancelled() => {
                     socket.close();
                 }
 
@@ -331,5 +337,9 @@ impl Transport for MatchboxTransport {
 
     async fn send_message(&self, msg: GameEvent) {
         self.send_transport_message(None, msg.into()).await;
+    }
+
+    fn disconnect(&self) {
+        self.cancel();
     }
 }
