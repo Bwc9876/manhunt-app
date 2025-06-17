@@ -37,9 +37,9 @@ export const commands = {
     /**
      * Quit a running game or leave a lobby
      */
-    async quitGameOrLobby(): Promise<Result<null, string>> {
+    async quitToMenu(): Promise<Result<null, string>> {
         try {
-            return { status: "ok", data: await TAURI_INVOKE("quit_game_or_lobby") };
+            return { status: "ok", data: await TAURI_INVOKE("quit_to_menu") };
         } catch (e) {
             if (e instanceof Error) throw e;
             else return { status: "error", error: e as any };
@@ -82,7 +82,7 @@ export const commands = {
      * (Screen: Lobby) HOST ONLY: Push new settings to everyone, does nothing on clients. Returns the
      * new lobby state
      */
-    async hostUpdateSettings(settings: GameSettings): Promise<Result<LobbyState, string>> {
+    async hostUpdateSettings(settings: GameSettings): Promise<Result<null, string>> {
         try {
             return { status: "ok", data: await TAURI_INVOKE("host_update_settings", { settings }) };
         } catch (e) {
@@ -93,7 +93,7 @@ export const commands = {
     /**
      * (Screen: Lobby) Switch teams between seekers and hiders, returns the new [LobbyState]
      */
-    async switchTeams(seeker: boolean): Promise<Result<LobbyState, string>> {
+    async switchTeams(seeker: boolean): Promise<Result<null, string>> {
         try {
             return { status: "ok", data: await TAURI_INVOKE("switch_teams", { seeker }) };
         } catch (e) {
@@ -116,7 +116,7 @@ export const commands = {
     /**
      * (Screen: Game) Mark this player as caught, this player will become a seeker. Returns the new game state
      */
-    async markCaught(): Promise<Result<GameState, string>> {
+    async markCaught(): Promise<Result<null, string>> {
         try {
             return { status: "ok", data: await TAURI_INVOKE("mark_caught") };
         } catch (e) {
@@ -128,7 +128,7 @@ export const commands = {
      * (Screen: Game) Grab a powerup on the map, this should be called when the user is *in range* of
      * the powerup. Returns the new game state after rolling for the powerup
      */
-    async grabPowerup(): Promise<Result<GameState, string>> {
+    async grabPowerup(): Promise<Result<null, string>> {
         try {
             return { status: "ok", data: await TAURI_INVOKE("grab_powerup") };
         } catch (e) {
@@ -140,7 +140,7 @@ export const commands = {
      * (Screen: Game) Use the currently held powerup in the player's held_powerup. Does nothing if the
      * player has none. Returns the updated game state
      */
-    async usePowerup(): Promise<Result<GameState, string>> {
+    async usePowerup(): Promise<Result<null, string>> {
         try {
             return { status: "ok", data: await TAURI_INVOKE("use_powerup") };
         } catch (e) {
@@ -155,6 +155,52 @@ export const commands = {
     async checkRoomCode(code: string): Promise<Result<boolean, string>> {
         try {
             return { status: "ok", data: await TAURI_INVOKE("check_room_code", { code }) };
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            else return { status: "error", error: e as any };
+        }
+    },
+    /**
+     * (Screen: Game) Get all player profiles with display names and profile pictures for this game
+     */
+    async getProfiles(): Promise<Result<Partial<{ [key in string]: PlayerProfile }>, string>> {
+        try {
+            return { status: "ok", data: await TAURI_INVOKE("get_profiles") };
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            else return { status: "error", error: e as any };
+        }
+    },
+    /**
+     * (Screen: Menu) Go to the game replay screen to replay the game history specified by id
+     */
+    async replayGame(id: string): Promise<Result<null, string>> {
+        try {
+            return { status: "ok", data: await TAURI_INVOKE("replay_game", { id }) };
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            else return { status: "error", error: e as any };
+        }
+    },
+    /**
+     * (Screen: Menu) Get a list of all previously played games, returns of list of DateTimes that represent when
+     * each game started, use this as a key
+     */
+    async listGameHistories(): Promise<Result<string[], string>> {
+        try {
+            return { status: "ok", data: await TAURI_INVOKE("list_game_histories") };
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            else return { status: "error", error: e as any };
+        }
+    },
+    /**
+     * (Screen: Replay) Get the game history that's currently being replayed. Try to limit calls to
+     * this
+     */
+    async getCurrentReplayHistory(): Promise<Result<AppGameHistory, string>> {
+        try {
+            return { status: "ok", data: await TAURI_INVOKE("get_current_replay_history") };
         } catch (e) {
             if (e instanceof Error) throw e;
             else return { status: "error", error: e as any };
@@ -174,8 +220,54 @@ export const events = __makeEvents__<{
 
 /** user-defined types **/
 
-export type AppScreen = "Setup" | "Menu" | "Lobby" | "Game";
+export type AppGameHistory = {
+    history: GameHistory;
+    profiles: Partial<{ [key in string]: PlayerProfile }>;
+};
+export type AppScreen = "Setup" | "Menu" | "Lobby" | "Game" | "Replay";
 export type ChangeScreen = AppScreen;
+/**
+ * An event used between players to update state
+ */
+export type GameEvent =
+    /**
+     * A player has been caught and is now a seeker, contains the ID of the caught player
+     */
+    | { PlayerCaught: string }
+    /**
+     * Public ping from a player revealing location
+     */
+    | { Ping: PlayerPing }
+    /**
+     * Force the player specified in `0` to ping, optionally display the ping as from the user
+     * specified in `1`.
+     */
+    | { ForcePing: [string, string | null] }
+    /**
+     * Force a powerup to despawn because a player got it, contains the player that got it.
+     */
+    | { PowerupDespawn: string }
+    /**
+     * Contains location history of the given player, used after the game to sync location
+     * histories
+     */
+    | { PostGameSync: [string, [string, Location][]] }
+    /**
+     * A player has been disconnected and removed from the game (because of error or otherwise).
+     * The player should be removed from all state
+     */
+    | { DroppedPlayer: string }
+    /**
+     * The underlying transport has disconnected
+     */
+    | "TransportDisconnect";
+export type GameHistory = {
+    my_id: string;
+    game_started: string;
+    game_ended: string;
+    events: [string, GameEvent][];
+    locations: [string, [string, Location][]][];
+};
 /**
  * Settings for the game, host is the only person able to change these
  */
@@ -213,47 +305,6 @@ export type GameSettings = {
      * Locations that powerups may spawn at
      */
     powerup_locations: Location[];
-};
-/**
- * This struct handles all logic regarding state updates
- */
-export type GameState = {
-    /**
-     * The id of this player in this game
-     */
-    id: string;
-    /**
-     * The powerup the player is currently holding
-     */
-    held_powerup: PowerUpType | null;
-    /**
-     * When the game started
-     */
-    game_started: string;
-    /**
-     * When seekers were allowed to begin
-     */
-    seekers_started: string | null;
-    /**
-     * Last time we pinged all players
-     */
-    last_global_ping: string | null;
-    /**
-     * Last time a powerup was spawned
-     */
-    last_powerup_spawn: string | null;
-    /**
-     * Hashmap tracking if a player is a seeker (true) or a hider (false)
-     */
-    caught_state: Partial<{ [key in string]: boolean }>;
-    /**
-     * A map of the latest global ping results for each player
-     */
-    pings: Partial<{ [key in string]: PlayerPing }>;
-    /**
-     * Powerup on the map that players can grab. Only one at a time
-     */
-    available_powerup: Location | null;
 };
 export type LobbyState = {
     profiles: Partial<{ [key in string]: PlayerProfile }>;
@@ -320,22 +371,6 @@ export type PlayerPing = {
     real_player: string;
 };
 export type PlayerProfile = { display_name: string; pfp_base64: string | null };
-/**
- * Type of powerup
- */
-export type PowerUpType =
-    /**
-     * Ping a random seeker instead of a hider
-     */
-    | "PingSeeker"
-    /**
-     * Pings all seekers locations on the map for hiders
-     */
-    | "PingAllSeekers"
-    /**
-     * Ping another random hider instantly
-     */
-    | "ForcePingOther";
 
 /** tauri-specta globals **/
 

@@ -298,12 +298,10 @@ impl MatchboxTransport {
 
                 _ = cancel.cancelled() => {
                     socket.close();
-
                 }
 
                 _ = timer.tick() => {
                     // Transport Tick
-                    continue;
                 }
 
                 _ = outgoing_rx.recv_many(&mut buffer, 30) => {

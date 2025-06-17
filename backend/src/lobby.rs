@@ -87,6 +87,11 @@ impl Lobby {
         self.state.lock().await.clone()
     }
 
+    pub async fn clone_profiles(&self) -> HashMap<Uuid, PlayerProfile> {
+        let state = self.state.lock().await;
+        state.profiles.clone()
+    }
+
     /// Set self as seeker or hider
     pub async fn switch_teams(&self, seeker: bool) {
         let mut state = self.state.lock().await;

@@ -8,6 +8,9 @@ use rand::{
 };
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::game::GameEvent;
 
 use super::{
     location::Location,
@@ -40,7 +43,7 @@ impl PlayerPing {
     }
 }
 
-#[derive(Debug, Clone, Serialize, specta::Type)]
+#[derive(Debug, Clone)]
 /// This struct handles all logic regarding state updates
 pub struct GameState {
     /// The id of this player in this game
@@ -51,6 +54,13 @@ pub struct GameState {
 
     /// When the game started
     game_started: UtcDT,
+
+    /// When the game ended, if this is [Option::Some] then the state will enter post-game sync
+    game_ended: Option<UtcDT>,
+
+    /// A HashMap of player IDs to location histories, used to track all player location histories
+    /// during post-game sync
+    player_histories: HashMap<Uuid, Option<Vec<(UtcDT, Location)>>>,
 
     /// When seekers were allowed to begin
     seekers_started: Option<UtcDT>,
@@ -70,25 +80,22 @@ pub struct GameState {
     /// Powerup on the map that players can grab. Only one at a time
     available_powerup: Option<Location>,
 
-    #[serde(skip)]
+    pub event_history: Vec<(UtcDT, GameEvent)>,
+
     /// The game's current settings
     settings: GameSettings,
 
-    #[serde(skip)]
     /// The player's location history
-    location_history: Vec<Location>,
+    pub location_history: Vec<(UtcDT, Location)>,
 
     /// Cached bernoulli distribution for powerups, faster sampling
-    #[serde(skip)]
     powerup_bernoulli: Bernoulli,
 
     /// A seed with a shared value between all players, should be reproducible
     /// RNG for use in stuff like powerup location selection.
-    #[serde(skip)]
     shared_random_increment: i64,
 
     /// State for [ChaCha20Rng] to be used and added to when performing shared RNG operations
-    #[serde(skip)]
     shared_random_state: u64,
 }
 
@@ -100,8 +107,11 @@ impl GameState {
         Self {
             id: my_id,
             game_started: Utc::now(),
+            event_history: Vec::with_capacity(15),
+            game_ended: None,
             seekers_started: None,
             pings: HashMap::with_capacity(initial_caught_state.len()),
+            player_histories: HashMap::from_iter(initial_caught_state.keys().map(|id| (*id, None))),
             caught_state: initial_caught_state,
             available_powerup: None,
             powerup_bernoulli: settings.get_powerup_bernoulli(),
@@ -240,9 +250,29 @@ impl GameState {
         self.pings.get(&player)
     }
 
+    /// Add a location history for the given player
+    pub fn insert_player_location_history(&mut self, id: Uuid, history: Vec<(UtcDT, Location)>) {
+        self.player_histories.insert(id, Some(history));
+    }
+
+    /// Check if we've complete the post-game sync
+    pub fn check_post_game_sync(&self) -> bool {
+        self.game_ended() && self.player_histories.values().all(Option::is_some)
+    }
+
     /// Check if the game should be ended (due to all players being caught)
-    pub fn should_end(&self) -> bool {
-        self.caught_state.values().all(|v| *v)
+    pub fn check_end_game(&mut self) -> bool {
+        let should_end = self.caught_state.values().all(|v| *v);
+        if should_end {
+            self.game_ended = Some(Utc::now());
+            self.player_histories
+                .insert(self.id, Some(self.location_history.clone()));
+        }
+        should_end
+    }
+
+    pub fn game_ended(&self) -> bool {
+        self.game_ended.is_some()
     }
 
     /// Remove a ping from the map
@@ -292,6 +322,7 @@ impl GameState {
     pub fn remove_player(&mut self, id: Id) {
         self.pings.remove(&id);
         self.caught_state.remove(&id);
+        self.player_histories.remove(&id);
     }
 
     /// Player has gotten a powerup, rolls to see which powerup and stores it
@@ -318,12 +349,12 @@ impl GameState {
 
     /// Push a new player location
     pub fn push_loc(&mut self, loc: Location) {
-        self.location_history.push(loc);
+        self.location_history.push((Utc::now(), loc));
     }
 
     /// Get the latest player location
     fn get_loc(&self) -> Option<&Location> {
-        self.location_history.last()
+        self.location_history.last().map(|(_, l)| l)
     }
 
     /// Mark a player as caught
@@ -342,4 +373,27 @@ impl GameState {
     pub fn is_seeker(&self) -> bool {
         self.caught_state.get(&self.id).copied().unwrap_or_default()
     }
+
+    pub fn as_game_history(&self) -> GameHistory {
+        GameHistory {
+            my_id: self.id,
+            events: self.event_history.clone(),
+            locations: self
+                .player_histories
+                .iter()
+                .map(|(id, history)| (*id, history.as_ref().cloned().unwrap_or_default()))
+                .collect(),
+            game_started: self.game_started,
+            game_ended: self.game_ended.unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct GameHistory {
+    my_id: Uuid,
+    pub game_started: UtcDT,
+    game_ended: UtcDT,
+    events: Vec<(UtcDT, GameEvent)>,
+    locations: Vec<(Uuid, Vec<(UtcDT, Location)>)>,
 }

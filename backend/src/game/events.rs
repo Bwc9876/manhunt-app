@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use super::{location::Location, state::PlayerPing, Id};
+use super::{location::Location, state::PlayerPing, Id, UtcDT};
 
 /// An event used between players to update state
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub enum GameEvent {
     /// A player has been caught and is now a seeker, contains the ID of the caught player
     PlayerCaught(Id),
@@ -16,7 +16,7 @@ pub enum GameEvent {
     PowerupDespawn(Id),
     /// Contains location history of the given player, used after the game to sync location
     /// histories
-    PostGameSync(Id, Vec<Location>),
+    PostGameSync(Id, Vec<(UtcDT, Location)>),
     /// A player has been disconnected and removed from the game (because of error or otherwise).
     /// The player should be removed from all state
     DroppedPlayer(Id),

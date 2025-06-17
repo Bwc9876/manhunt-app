@@ -1,12 +1,14 @@
 mod game;
+mod history;
 mod lobby;
 mod location;
 mod profile;
 mod transport;
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use game::{Game as BaseGame, GameSettings, GameState};
+use game::{Game as BaseGame, GameSettings};
+use history::AppGameHistory;
 use lobby::{Lobby, LobbyState, StartGameInfo};
 use location::TauriLocation;
 use log::{error, warn};
@@ -20,11 +22,13 @@ use transport::MatchboxTransport;
 use uuid::Uuid;
 
 mod prelude {
-    pub use anyhow::{anyhow, bail, Error as AnyhowError};
+    pub use anyhow::{anyhow, bail, Context, Error as AnyhowError};
     pub use std::result::Result as StdResult;
 
     pub type Result<T = (), E = AnyhowError> = StdResult<T, E>;
 }
+
+use prelude::*;
 
 type Game = BaseGame<TauriLocation, MatchboxTransport>;
 
@@ -32,7 +36,17 @@ enum AppState {
     Setup,
     Menu(PlayerProfile),
     Lobby(Arc<Lobby>),
-    Game(Arc<Game>),
+    Game(Arc<Game>, HashMap<Uuid, PlayerProfile>),
+    Replay(AppGameHistory),
+}
+
+#[derive(Serialize, Deserialize, specta::Type, Debug, Clone, Eq, PartialEq)]
+enum AppScreen {
+    Setup,
+    Menu,
+    Lobby,
+    Game,
+    Replay,
 }
 
 type AppStateHandle = RwLock<AppState>;
@@ -58,9 +72,10 @@ pub const fn server_url() -> &'static str {
 struct ChangeScreen(AppScreen);
 
 impl AppState {
-    pub fn start_game(&mut self, app: AppHandle, my_id: Uuid, start: StartGameInfo) {
+    pub async fn start_game(&mut self, app: AppHandle, my_id: Uuid, start: StartGameInfo) {
         if let AppState::Lobby(lobby) = self {
             let transport = lobby.clone_transport();
+            let profiles = lobby.clone_profiles().await;
             let location = TauriLocation::new(app.clone());
             let game = Arc::new(Game::new(
                 my_id,
@@ -71,21 +86,23 @@ impl AppState {
                 location,
                 lobby.clone_cancel(),
             ));
-            *self = AppState::Game(game.clone());
+            *self = AppState::Game(game.clone(), profiles.clone());
             tokio::spawn(async move {
                 let res = game.main_loop().await;
                 let app2 = app.clone();
                 let state_handle = app.state::<AppStateHandle>();
                 let mut state = state_handle.write().await;
                 match res {
-                    Ok(_) => {
-                        // TODO: Post game screen, etc here. Game::main_loop should return smth
-                        // like GameHistory for playback and serialization
-                        state.quit_game_or_lobby(app2);
+                    Ok(history) => {
+                        let history = AppGameHistory::new(history, profiles);
+                        if let Err(why) = history.save_history(&app2) {
+                            error!("Failed to save game history: {why:?}");
+                        }
+                        state.quit_to_menu(app2);
                     }
                     Err(why) => {
                         error!("Game Error: {why:?}");
-                        state.quit_game_or_lobby(app2);
+                        state.quit_to_menu(app2);
                     }
                 }
             });
@@ -107,22 +124,53 @@ impl AppState {
     }
 
     pub fn get_lobby(&self) -> Result<Arc<Lobby>> {
-        match self {
-            AppState::Lobby(lobby) => Ok(lobby.clone()),
-            _ => Err("Not on lobby screen".to_string()),
+        if let AppState::Lobby(lobby) = self {
+            Ok(lobby.clone())
+        } else {
+            Err("Not on lobby screen".to_string())
         }
     }
 
     pub fn get_game(&self) -> Result<Arc<Game>> {
-        match self {
-            AppState::Game(game) => Ok(game.clone()),
-            _ => Err("Not on game screen".to_string()),
+        if let AppState::Game(game, _) = self {
+            Ok(game.clone())
+        } else {
+            Err("Not on game screen".to_string())
+        }
+    }
+
+    pub fn get_profiles(&self) -> Result<&HashMap<Uuid, PlayerProfile>> {
+        if let AppState::Game(_, profiles) = self {
+            Ok(profiles)
+        } else {
+            Err("Not on game screen".to_string())
+        }
+    }
+
+    pub fn get_replay(&self) -> Result<AppGameHistory> {
+        if let AppState::Replay(history) = self {
+            Ok(history.clone())
+        } else {
+            Err("Not on replay screen".to_string())
         }
     }
 
     fn emit_screen_change(app: &AppHandle, screen: AppScreen) {
         if let Err(why) = ChangeScreen(screen).emit(app) {
             warn!("Error emitting screen change: {why:?}");
+        }
+    }
+
+    pub fn replay_game(&mut self, app: &AppHandle, id: UtcDT) -> Result {
+        if let AppState::Menu(_) = self {
+            let history = AppGameHistory::get_history(app, id)
+                .context("Failed to read history")
+                .map_err(|e| e.to_string())?;
+            *self = AppState::Replay(history);
+            Self::emit_screen_change(app, AppScreen::Replay);
+            Ok(())
+        } else {
+            Err("Not on menu screen".to_string())
         }
     }
 
@@ -151,11 +199,11 @@ impl AppState {
                 let mut state = state_handle.write().await;
                 match res {
                     Ok((my_id, start)) => {
-                        state.start_game(app_game, my_id, start);
+                        state.start_game(app_game, my_id, start).await;
                     }
                     Err(why) => {
                         error!("Lobby Error: {why:?}");
-                        state.quit_game_or_lobby(app_game);
+                        state.quit_to_menu(app_game);
                     }
                 }
             });
@@ -163,7 +211,7 @@ impl AppState {
         }
     }
 
-    pub fn quit_game_or_lobby(&mut self, app: AppHandle) {
+    pub fn quit_to_menu(&mut self, app: AppHandle) {
         let profile = match self {
             AppState::Setup => None,
             AppState::Menu(_) => {
@@ -174,10 +222,11 @@ impl AppState {
                 lobby.quit_lobby();
                 Some(lobby.self_profile.clone())
             }
-            AppState::Game(game) => {
+            AppState::Game(game, _) => {
                 game.quit_game();
                 PlayerProfile::load_from_store(&app)
             }
+            AppState::Replay(_) => PlayerProfile::load_from_store(&app),
         };
         let screen = if let Some(profile) = profile {
             *self = AppState::Menu(profile);
@@ -193,15 +242,9 @@ impl AppState {
 
 use std::result::Result as StdResult;
 
-type Result<T = (), E = String> = StdResult<T, E>;
+use crate::game::UtcDT;
 
-#[derive(Serialize, Deserialize, specta::Type, Debug, Clone)]
-enum AppScreen {
-    Setup,
-    Menu,
-    Lobby,
-    Game,
-}
+type Result<T = (), E = String> = StdResult<T, E>;
 
 // == GENERAL / FLOW COMMANDS ==
 
@@ -214,16 +257,17 @@ async fn get_current_screen(state: State<'_, AppStateHandle>) -> Result<AppScree
         AppState::Setup => AppScreen::Setup,
         AppState::Menu(_player_profile) => AppScreen::Menu,
         AppState::Lobby(_lobby) => AppScreen::Lobby,
-        AppState::Game(_game) => AppScreen::Game,
+        AppState::Game(_game, _profiles) => AppScreen::Game,
+        AppState::Replay(_) => AppScreen::Replay,
     })
 }
 
 #[tauri::command]
 #[specta::specta]
 /// Quit a running game or leave a lobby
-async fn quit_game_or_lobby(app: AppHandle, state: State<'_, AppStateHandle>) -> Result {
+async fn quit_to_menu(app: AppHandle, state: State<'_, AppStateHandle>) -> Result {
     let mut state = state.write().await;
-    state.quit_game_or_lobby(app);
+    state.quit_to_menu(app);
     Ok(())
 }
 
@@ -236,6 +280,22 @@ async fn get_profile(state: State<'_, AppStateHandle>) -> Result<PlayerProfile> 
     let state = state.read().await;
     let profile = state.get_menu()?;
     Ok(profile.clone())
+}
+
+#[tauri::command]
+#[specta::specta]
+/// (Screen: Menu) Get a list of all previously played games, returns of list of DateTimes that represent when
+/// each game started, use this as a key
+fn list_game_histories(app: AppHandle) -> Result<Vec<UtcDT>> {
+    AppGameHistory::ls_histories(&app)
+        .map_err(|err| err.context("Failed to get game histories").to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+/// (Screen: Menu) Go to the game replay screen to replay the game history specified by id
+async fn replay_game(id: UtcDT, app: AppHandle, state: State<'_, AppStateHandle>) -> Result {
+    state.write().await.replay_game(&app, id)
 }
 
 #[tauri::command]
@@ -293,23 +353,20 @@ async fn get_lobby_state(state: State<'_, AppStateHandle>) -> Result<LobbyState>
 #[tauri::command]
 #[specta::specta]
 /// (Screen: Lobby) Switch teams between seekers and hiders, returns the new [LobbyState]
-async fn switch_teams(seeker: bool, state: State<'_, AppStateHandle>) -> Result<LobbyState> {
+async fn switch_teams(seeker: bool, state: State<'_, AppStateHandle>) -> Result {
     let lobby = state.read().await.get_lobby()?;
     lobby.switch_teams(seeker).await;
-    Ok(lobby.clone_state().await)
+    Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
 /// (Screen: Lobby) HOST ONLY: Push new settings to everyone, does nothing on clients. Returns the
 /// new lobby state
-async fn host_update_settings(
-    settings: GameSettings,
-    state: State<'_, AppStateHandle>,
-) -> Result<LobbyState> {
+async fn host_update_settings(settings: GameSettings, state: State<'_, AppStateHandle>) -> Result {
     let lobby = state.read().await.get_lobby()?;
     lobby.update_settings(settings).await;
-    Ok(lobby.clone_state().await)
+    Ok(())
 }
 
 #[tauri::command]
@@ -325,31 +382,48 @@ async fn host_start_game(state: State<'_, AppStateHandle>) -> Result {
 
 #[tauri::command]
 #[specta::specta]
+/// (Screen: Game) Get all player profiles with display names and profile pictures for this game
+async fn get_profiles(state: State<'_, AppStateHandle>) -> Result<HashMap<Uuid, PlayerProfile>> {
+    state.read().await.get_profiles().cloned()
+}
+
+#[tauri::command]
+#[specta::specta]
 /// (Screen: Game) Mark this player as caught, this player will become a seeker. Returns the new game state
-async fn mark_caught(state: State<'_, AppStateHandle>) -> Result<GameState> {
+async fn mark_caught(state: State<'_, AppStateHandle>) -> Result {
     let game = state.read().await.get_game()?;
     game.mark_caught().await;
-    Ok(game.clone_state().await)
+    Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
 /// (Screen: Game) Grab a powerup on the map, this should be called when the user is *in range* of
 /// the powerup. Returns the new game state after rolling for the powerup
-async fn grab_powerup(state: State<'_, AppStateHandle>) -> Result<GameState> {
+async fn grab_powerup(state: State<'_, AppStateHandle>) -> Result {
     let game = state.read().await.get_game()?;
     game.get_powerup().await;
-    Ok(game.clone_state().await)
+    Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
 /// (Screen: Game) Use the currently held powerup in the player's held_powerup. Does nothing if the
 /// player has none. Returns the updated game state
-async fn use_powerup(state: State<'_, AppStateHandle>) -> Result<GameState> {
+async fn use_powerup(state: State<'_, AppStateHandle>) -> Result {
     let game = state.read().await.get_game()?;
     game.use_powerup().await;
-    Ok(game.clone_state().await)
+    Ok(())
+}
+
+// AppState::Replay COMMANDS
+
+#[tauri::command]
+#[specta::specta]
+/// (Screen: Replay) Get the game history that's currently being replayed. Try to limit calls to
+/// this
+async fn get_current_replay_history(state: State<'_, AppStateHandle>) -> Result<AppGameHistory> {
+    state.read().await.get_replay()
 }
 
 pub fn mk_specta() -> tauri_specta::Builder {
@@ -357,7 +431,7 @@ pub fn mk_specta() -> tauri_specta::Builder {
         .commands(collect_commands![
             start_lobby,
             get_profile,
-            quit_game_or_lobby,
+            quit_to_menu,
             get_current_screen,
             update_profile,
             get_lobby_state,
@@ -368,6 +442,10 @@ pub fn mk_specta() -> tauri_specta::Builder {
             grab_powerup,
             use_powerup,
             check_room_code,
+            get_profiles,
+            replay_game,
+            list_game_histories,
+            get_current_replay_history
         ])
         .events(collect_events![ChangeScreen])
 }

@@ -18,7 +18,7 @@ mod transport;
 use crate::prelude::*;
 
 pub use location::{Location, LocationService};
-pub use state::GameState;
+pub use state::{GameHistory, GameState};
 pub use transport::Transport;
 
 pub type Id = Uuid;
@@ -58,16 +58,12 @@ impl<L: LocationService, T: Transport> Game<L, T> {
         }
     }
 
-    pub async fn clone_state(&self) -> GameState {
-        self.state.read().await.clone()
-    }
-
     pub async fn mark_caught(&self) {
         let mut state = self.state.write().await;
         let id = state.id;
         state.mark_caught(id);
         state.remove_ping(id);
-        // TODO: Maybe reroll for new powerups instead of just erasing it
+        // TODO: Maybe reroll for new powerups (specifically seeker ones) instead of just erasing it
         state.use_powerup();
 
         self.transport
@@ -111,6 +107,10 @@ impl<L: LocationService, T: Transport> Game<L, T> {
     }
 
     async fn consume_event(&self, state: &mut GameState, event: GameEvent) -> Result {
+        if !state.game_ended() {
+            state.event_history.push((Utc::now(), event.clone()));
+        }
+
         match event {
             GameEvent::Ping(player_ping) => state.add_ping(player_ping),
             GameEvent::ForcePing(target, display) => {
@@ -140,14 +140,30 @@ impl<L: LocationService, T: Transport> Game<L, T> {
             GameEvent::TransportDisconnect => {
                 bail!("Transport disconnected");
             }
-            GameEvent::PostGameSync(_, _locations) => {}
+            GameEvent::PostGameSync(id, history) => {
+                state.insert_player_location_history(id, history);
+            }
         }
 
         Ok(())
     }
 
     /// Perform a tick for a specific moment in time
-    async fn tick(&self, state: &mut GameState, now: UtcDT) {
+    /// Returns whether the game loop should be broken.
+    async fn tick(&self, state: &mut GameState, now: UtcDT) -> bool {
+        if state.check_end_game() {
+            // If we're at the point where the game is over, send out our location history
+            let msg = GameEvent::PostGameSync(state.id, state.location_history.clone());
+            self.transport.send_message(msg).await;
+        }
+
+        if state.game_ended() {
+            // Don't do normal ticks if the game is over,
+            // simply return if we're done doing a post-game sync
+
+            return state.check_post_game_sync();
+        }
+
         // Push to location history
         if let Some(location) = self.location.get_loc() {
             state.push_loc(location);
@@ -192,6 +208,8 @@ impl<L: LocationService, T: Transport> Game<L, T> {
         if state.should_spawn_powerup(&now) {
             state.try_spawn_powerup(now);
         }
+
+        false
     }
 
     #[cfg(test)]
@@ -205,7 +223,7 @@ impl<L: LocationService, T: Transport> Game<L, T> {
     }
 
     /// Main loop of the game, handles ticking and receiving messages from [Transport].
-    pub async fn main_loop(&self) -> Result {
+    pub async fn main_loop(&self) -> Result<GameHistory> {
         let mut interval = tokio::time::interval(self.interval);
 
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -221,15 +239,16 @@ impl<L: LocationService, T: Transport> Game<L, T> {
                             break 'game Err(why);
                         }
                     }
-
-                    if state.should_end() {
-                        break Ok(());
-                    }
                 }
 
                 _ = interval.tick() => {
                     let mut state = self.state.write().await;
-                    self.tick(&mut state, Utc::now()).await;
+                    let should_break = self.tick(&mut state, Utc::now()).await;
+
+                    if should_break {
+                        let history = state.as_game_history();
+                        break Ok(history);
+                    }
                 }
             }
         };
