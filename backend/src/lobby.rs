@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use log::{error, warn};
 use serde::{Deserialize, Serialize};
@@ -168,12 +168,8 @@ impl Lobby {
         let transport_inner = self.transport.clone();
         tokio::spawn(async move { transport_inner.transport_loop().await });
 
-        let mut interval = tokio::time::interval(Duration::from_secs(1));
-
         let res = 'lobby: loop {
             self.emit_state_update();
-
-            interval.tick().await;
 
             let msgs = self.transport.recv_transport_messages().await;
 
