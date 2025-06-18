@@ -178,6 +178,17 @@ impl AppState {
         }
     }
 
+    pub fn complete_setup(&mut self, app: &AppHandle, profile: PlayerProfile) -> Result {
+        if let AppState::Setup = self {
+            profile.write_to_store(app);
+            *self = AppState::Menu(profile);
+            Self::emit_screen_change(app, AppScreen::Menu);
+            Ok(())
+        } else {
+            Err("Must be on the Setup screen".to_string())
+        }
+    }
+
     pub fn replay_game(&mut self, app: &AppHandle, id: UtcDT) -> Result {
         if let AppState::Menu(_) = self {
             let history = AppGameHistory::get_history(app, id)
@@ -287,6 +298,19 @@ async fn quit_to_menu(app: AppHandle, state: State<'_, AppStateHandle>) -> Resul
     let mut state = state.write().await;
     state.quit_to_menu(app);
     Ok(())
+}
+
+// == AppState::Setup COMMANDS
+
+#[tauri::command]
+#[specta::specta]
+/// (Screen: Setup) Complete user setup and go to the menu screen
+async fn complete_setup(
+    profile: PlayerProfile,
+    app: AppHandle,
+    state: State<'_, AppStateHandle>,
+) -> Result {
+    state.write().await.complete_setup(&app, profile)
 }
 
 // == AppState::Menu COMMANDS ==
@@ -482,6 +506,7 @@ pub fn mk_specta() -> tauri_specta::Builder {
             get_current_replay_history,
             get_game_settings,
             get_game_state,
+            complete_setup,
         ])
         .events(collect_events![
             ChangeScreen,

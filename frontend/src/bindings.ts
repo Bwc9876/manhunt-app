@@ -229,6 +229,17 @@ export const commands = {
             if (e instanceof Error) throw e;
             else return { status: "error", error: e as any };
         }
+    },
+    /**
+     * (Screen: Setup) Complete user setup and go to the menu screen
+     */
+    async completeSetup(profile: PlayerProfile): Promise<Result<null, string>> {
+        try {
+            return { status: "ok", data: await TAURI_INVOKE("complete_setup", { profile }) };
+        } catch (e) {
+            if (e instanceof Error) throw e;
+            else return { status: "error", error: e as any };
+        }
     }
 };
 
