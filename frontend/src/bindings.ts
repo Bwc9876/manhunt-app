@@ -302,7 +302,11 @@ export type GameEvent =
     /**
      * The underlying transport has disconnected
      */
-    | "TransportDisconnect";
+    | "TransportDisconnect"
+    /**
+     * The underlying transport encountered an error
+     */
+    | { TransportError: string };
 export type GameHistory = {
     my_id: string;
     game_started: string;
@@ -385,6 +389,10 @@ export type GameUiState = {
      * The last time all hiders were pinged **in UTC**
      */
     last_global_ping: string | null;
+    /**
+     * The last time a powerup was spawned **in UTC**
+     */
+    last_powerup_spawn: string | null;
     /**
      * The [PowerUpType] the local player is holding
      */

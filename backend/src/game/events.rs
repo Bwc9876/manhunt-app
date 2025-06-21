@@ -22,4 +22,6 @@ pub enum GameEvent {
     DroppedPlayer(Id),
     /// The underlying transport has disconnected
     TransportDisconnect,
+    /// The underlying transport encountered an error
+    TransportError(String),
 }

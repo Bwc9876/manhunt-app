@@ -16,6 +16,7 @@ use log::{error, info, warn, LevelFilter};
 use profile::PlayerProfile;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_specta::{collect_commands, collect_events, Event};
 use tokio::sync::RwLock;
 use transport::MatchboxTransport;
@@ -107,11 +108,16 @@ impl AppState {
                         let history = AppGameHistory::new(history, profiles);
                         if let Err(why) = history.save_history(&app2) {
                             error!("Failed to save game history: {why:?}");
+                            app2.dialog()
+                                .message("Failed to save the history of this game")
+                                .kind(MessageDialogKind::Error)
+                                .show(|_| {});
                         }
                         state.quit_to_menu(app2);
                     }
                     Err(why) => {
                         error!("Game Error: {why:?}");
+                        app2.dialog().message("There was a connection error in the game, you have been disconnected").kind(MessageDialogKind::Error).show(|_| {});
                         state.quit_to_menu(app2);
                     }
                 }
@@ -225,6 +231,11 @@ impl AppState {
                     }
                     Err(why) => {
                         error!("Lobby Error: {why:?}");
+                        app_game
+                            .dialog()
+                            .message("Error joining the lobby")
+                            .kind(MessageDialogKind::Error)
+                            .show(|_| {});
                         state.quit_to_menu(app_game);
                     }
                 }
@@ -513,6 +524,7 @@ pub fn run() {
     let builder = mk_specta();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_log::Builder::new()

@@ -193,12 +193,16 @@ impl GameState {
 
     /// Whether to start spawning powerups
     pub fn should_start_powerups(&self, now: UtcDT) -> bool {
-        match self.settings.powerup_start {
-            PingStartCondition::Players(num) => (self.iter_seekers().count() as u32) >= num,
-            PingStartCondition::Minutes(mins) => self
-                .minutes_since_seekers_released(now)
-                .is_some_and(|seekers_released| seekers_released >= mins),
-            PingStartCondition::Instant => true,
+        if self.settings.powerup_locations.is_empty() {
+            false
+        } else {
+            match self.settings.powerup_start {
+                PingStartCondition::Players(num) => (self.iter_seekers().count() as u32) >= num,
+                PingStartCondition::Minutes(mins) => self
+                    .minutes_since_seekers_released(now)
+                    .is_some_and(|seekers_released| seekers_released >= mins),
+                PingStartCondition::Instant => true,
+            }
         }
     }
 
@@ -397,6 +401,7 @@ impl GameState {
             game_started: self.game_started,
             game_ended: self.game_ended,
             last_global_ping: self.last_global_ping,
+            last_powerup_spawn: self.last_powerup_spawn,
             held_powerup: self.held_powerup,
             seekers_started: self.seekers_started,
         }
@@ -433,6 +438,8 @@ pub struct GameUiState {
     game_ended: Option<UtcDT>,
     /// The last time all hiders were pinged **in UTC**
     last_global_ping: Option<UtcDT>,
+    /// The last time a powerup was spawned **in UTC**
+    last_powerup_spawn: Option<UtcDT>,
     /// The [PowerUpType] the local player is holding
     held_powerup: Option<PowerUpType>,
     /// When the seekers were allowed to start **in UTC**

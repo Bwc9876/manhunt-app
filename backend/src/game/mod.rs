@@ -151,6 +151,9 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
             GameEvent::TransportDisconnect => {
                 bail!("Transport disconnected");
             }
+            GameEvent::TransportError(err) => {
+                bail!("Transport error: {err}");
+            }
             GameEvent::PostGameSync(id, history) => {
                 state.insert_player_location_history(id, history);
             }

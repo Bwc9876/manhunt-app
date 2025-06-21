@@ -8,6 +8,7 @@
         "opener:default",
         "notification:default",
         "log:default",
-        "geolocation:default"
+        "geolocation:default",
+        "dialog:default"
     ]
 }

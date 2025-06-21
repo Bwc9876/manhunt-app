@@ -41,6 +41,10 @@ export default function GameScreen() {
         }
     };
 
+    const quitToMenu = async () => {
+        unwrapResult(await commands.quitToMenu());
+    };
+
     if (gameState.game_ended) {
         return <h2>Game Over! Syncing histories...</h2>;
     } else if (isSeeker && gameState.seekers_started === null) {
@@ -72,6 +76,9 @@ export default function GameScreen() {
                     <small>Pings haven&apos;t started yet</small>
                 )}
                 <h2>Powerups</h2>
+                {gameState.last_powerup_spawn === null && (
+                    <small>Powerups haven&apos;t started yet</small>
+                )}
                 {gameState.available_powerup && (
                     <p>
                         Powerup Available: {JSON.stringify(gameState.available_powerup)}{" "}
@@ -86,6 +93,8 @@ export default function GameScreen() {
                         )) || <button onClick={usePowerup}>Use</button>}
                     </p>
                 )}
+                <h2>Quit</h2>
+                <button onClick={quitToMenu}>Quit To Menu</button>
             </>
         );
     }

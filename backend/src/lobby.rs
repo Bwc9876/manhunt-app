@@ -182,8 +182,11 @@ impl Lobby {
                     }
                     TransportMessage::Disconnected => {
                         break 'lobby Err(anyhow!(
-                            "Transport disconnected before lobby could start game"
+                            "Transport disconnected unexpectedly before lobby could start game"
                         ));
+                    }
+                    TransportMessage::Error(why) => {
+                        break 'lobby Err(anyhow!("Transport error: {why}"));
                     }
                     TransportMessage::Game(game_event) => {
                         eprintln!("Peer {peer:?} sent a GameEvent: {game_event:?}");

@@ -32,6 +32,10 @@ export default function LobbyScreen() {
         unwrapResult(await commands.quitToMenu());
     };
 
+    if (lobbyState.self_id === null) {
+        return <h2>Connecting to Lobby...</h2>;
+    }
+
     return (
         <>
             <h2>Join Code: {lobbyState.join_code}</h2>
@@ -58,8 +62,6 @@ export default function LobbyScreen() {
                     ))}
             </ul>
             <button onClick={quit}>Quit to Menu</button>
-
-            <code>{JSON.stringify(lobbyState)}</code>
         </>
     );
 }

@@ -43,6 +43,8 @@ pub enum TransportMessage {
     /// Event sent when the transport gets disconnected, used to help consumers know when to stop
     /// consuming messages
     Disconnected,
+    /// Event when the transport encounters a critical error and needs to disconnect
+    Error(String),
     /// Internal message for packet chunking
     Seq(TransportChunk),
 }
@@ -322,8 +324,11 @@ impl MatchboxTransport {
                     self.handle_send(&mut socket, &all_peers, &mut buffer).await;
                 }
 
-                _ = &mut loop_fut => {
+                res = &mut loop_fut => {
                     // Break on disconnect
+                    if let Err(why) = res {
+                        self.push_incoming(my_id.unwrap_or_default(), TransportMessage::Error(why.to_string())).await;
+                    }
                     break;
                 }
             }
@@ -339,6 +344,8 @@ impl Transport for MatchboxTransport {
             .filter_map(|(id, msg)| match msg {
                 TransportMessage::Game(game_event) => Some(*game_event),
                 TransportMessage::PeerDisconnect => Some(GameEvent::DroppedPlayer(id)),
+                TransportMessage::Disconnected => Some(GameEvent::TransportDisconnect),
+                TransportMessage::Error(err) => Some(GameEvent::TransportError(err)),
                 _ => None,
             })
     }
