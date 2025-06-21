@@ -1,6 +1,7 @@
 import { commands, GameSettings } from "@/bindings";
-import { unwrapResult } from "@/lib/result";
+import { sharedSwrConfig } from "@/lib/hooks";
 import React from "react";
+import useSWR from "swr";
 
 // Temp settings for now.
 const settings: GameSettings = {
@@ -20,23 +21,25 @@ const settings: GameSettings = {
     ]
 };
 
-function MainMenu({
-    profilePromise,
-    historyPromise
-}: {
-    profilePromise: ReturnType<typeof commands.getProfile>;
-    historyPromise: ReturnType<typeof commands.listGameHistories>;
-}) {
-    const initialProfile = unwrapResult(React.use(profilePromise));
-    const gameHistory = unwrapResult(React.use(historyPromise));
-    const [profile, setProfile] = React.useState(initialProfile);
-    const [newName, setName] = React.useState(initialProfile.display_name);
+export default function MenuScreen() {
     const [roomCode, setRoomCode] = React.useState("");
+    const [newName, setName] = React.useState("");
+
+    const { data: profile, mutate: setProfile } = useSWR(
+        "fetch-profile",
+        commands.getProfile,
+        sharedSwrConfig
+    );
+    const { data: gameHistory } = useSWR(
+        "list-game-history",
+        commands.listGameHistories,
+        sharedSwrConfig
+    );
 
     const onStartGame = async (code: string | null) => {
         if (code) {
             try {
-                const validCode = unwrapResult(await commands.checkRoomCode(code));
+                const validCode = await commands.checkRoomCode(code);
                 if (!validCode) {
                     window.alert("Invalid Join Code");
                     return;
@@ -50,10 +53,8 @@ function MainMenu({
     };
 
     const onSaveProfile = async () => {
-        unwrapResult(await commands.updateProfile({ ...profile, display_name: newName }));
-        setProfile((p) => {
-            return { ...p, display_name: newName };
-        });
+        await commands.updateProfile({ ...profile, display_name: newName });
+        setProfile({ ...profile, display_name: newName });
     };
 
     return (
@@ -77,7 +78,11 @@ function MainMenu({
             </div>
             <hr />
             <h3>Edit Profile</h3>
-            <input value={newName} onChange={(e) => setName(e.target.value)} />
+            <input
+                placeholder={profile.display_name}
+                value={newName}
+                onChange={(e) => setName(e.target.value)}
+            />
             <button onClick={onSaveProfile}>Save</button>
             <hr />
             <h3>Previous Games</h3>
@@ -87,16 +92,5 @@ function MainMenu({
                 ))}
             </ul>
         </>
-    );
-}
-
-export default function MenuScreen() {
-    const profilePromise = commands.getProfile();
-    const previousGamesPromise = commands.listGameHistories();
-
-    return (
-        <React.Suspense fallback={<p>Loading profile</p>}>
-            <MainMenu profilePromise={profilePromise} historyPromise={previousGamesPromise} />
-        </React.Suspense>
     );
 }

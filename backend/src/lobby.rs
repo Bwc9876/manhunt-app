@@ -162,7 +162,7 @@ impl Lobby {
         self.transport.cancel();
     }
 
-    pub async fn open(&self) -> Result<(Uuid, StartGameInfo)> {
+    pub async fn open(&self) -> Result<Option<(Uuid, StartGameInfo)>> {
         let transport_inner = self.transport.clone();
         tokio::spawn(async move { transport_inner.transport_loop().await });
 
@@ -181,9 +181,7 @@ impl Lobby {
                         state.profiles.insert(id, self.self_profile.clone());
                     }
                     TransportMessage::Disconnected => {
-                        break 'lobby Err(anyhow!(
-                            "Transport disconnected unexpectedly before lobby could start game"
-                        ));
+                        break 'lobby Ok(None);
                     }
                     TransportMessage::Error(why) => {
                         break 'lobby Err(anyhow!("Transport error: {why}"));
@@ -207,7 +205,7 @@ impl Lobby {
                                 .await
                                 .self_id
                                 .expect("Error getting self ID");
-                            break 'lobby Ok((id, start_game_info));
+                            break 'lobby Ok(Some((id, start_game_info)));
                         }
                         LobbyMessage::PlayerSwitch(seeker) => {
                             let mut state = self.state.lock().await;

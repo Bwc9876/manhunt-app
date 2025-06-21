@@ -6,7 +6,7 @@ use std::{
 use anyhow::Context;
 use futures::FutureExt;
 use log::error;
-use matchbox_socket::{PeerId, PeerState, WebRtcSocket};
+use matchbox_socket::{Error as SocketError, PeerId, PeerState, WebRtcSocket};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
@@ -206,7 +206,26 @@ impl MatchboxTransport {
     pub async fn transport_loop(&self) {
         let (mut socket, loop_fut) = WebRtcSocket::new_reliable(&self.ws_url);
 
-        let loop_fut = loop_fut.fuse();
+        let loop_fut = async {
+            let msg = match loop_fut.await {
+                Ok(_) => TransportMessage::Disconnected,
+                Err(e) => {
+                    let msg = match e {
+                        SocketError::ConnectionFailed(e) => {
+                            format!("Failed to connect to server: {e}")
+                        }
+                        SocketError::Disconnected(e) => {
+                            format!("Disconnected from server, network error or kick: {e}")
+                        }
+                    };
+                    TransportMessage::Error(msg)
+                }
+            };
+            self.push_incoming(self.my_id.read().await.unwrap_or_default(), msg)
+                .await;
+        }
+        .fuse();
+
         tokio::pin!(loop_fut);
 
         let mut all_peers = HashSet::<PeerId>::with_capacity(20);
@@ -310,29 +329,28 @@ impl MatchboxTransport {
             let mut buffer = Vec::with_capacity(30);
 
             tokio::select! {
-
                 _ = self.cancel_token.cancelled() => {
-                    socket.close();
+                    // Break if cancelled externally
+                    break;
                 }
 
-                _ = timer.tick() => {
-                    // Transport Tick
+                _ = &mut loop_fut => {
+                    // Break if disconnected
+                    break;
                 }
+
+                // Rerun every tick
+                _ = timer.tick() => {}
 
                 _ = outgoing_rx.recv_many(&mut buffer, 30) => {
-
+                    // Handle sending new messages
                     self.handle_send(&mut socket, &all_peers, &mut buffer).await;
-                }
-
-                res = &mut loop_fut => {
-                    // Break on disconnect
-                    if let Err(why) = res {
-                        self.push_incoming(my_id.unwrap_or_default(), TransportMessage::Error(why.to_string())).await;
-                    }
-                    break;
                 }
             }
         }
+
+        drop(socket);
+        loop_fut.await
     }
 }
 

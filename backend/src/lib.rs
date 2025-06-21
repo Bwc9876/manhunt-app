@@ -17,7 +17,7 @@ use profile::PlayerProfile;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
-use tauri_specta::{collect_commands, collect_events, Event};
+use tauri_specta::{collect_commands, collect_events, ErrorHandlingMode, Event};
 use tokio::sync::RwLock;
 use transport::MatchboxTransport;
 use uuid::Uuid;
@@ -104,7 +104,7 @@ impl AppState {
                 let state_handle = app.state::<AppStateHandle>();
                 let mut state = state_handle.write().await;
                 match res {
-                    Ok(history) => {
+                    Ok(Some(history)) => {
                         let history = AppGameHistory::new(history, profiles);
                         if let Err(why) = history.save_history(&app2) {
                             error!("Failed to save game history: {why:?}");
@@ -115,9 +115,15 @@ impl AppState {
                         }
                         state.quit_to_menu(app2);
                     }
+                    Ok(None) => {
+                        info!("User quit game");
+                    }
                     Err(why) => {
                         error!("Game Error: {why:?}");
-                        app2.dialog().message("There was a connection error in the game, you have been disconnected").kind(MessageDialogKind::Error).show(|_| {});
+                        app2.dialog()
+                            .message(format!("Connection Error: {why}"))
+                            .kind(MessageDialogKind::Error)
+                            .show(|_| {});
                         state.quit_to_menu(app2);
                     }
                 }
@@ -225,15 +231,18 @@ impl AppState {
                 let state_handle = app2.state::<AppStateHandle>();
                 let mut state = state_handle.write().await;
                 match res {
-                    Ok((my_id, start)) => {
+                    Ok(Some((my_id, start))) => {
                         info!("Starting game as {my_id}");
                         state.start_game(app_game, my_id, start).await;
                     }
+                    Ok(None) => {
+                        info!("User quit lobby");
+                    }
                     Err(why) => {
-                        error!("Lobby Error: {why:?}");
+                        error!("Lobby Error: {why}");
                         app_game
                             .dialog()
-                            .message("Error joining the lobby")
+                            .message(format!("Error joining the lobby: {why}"))
                             .kind(MessageDialogKind::Error)
                             .show(|_| {});
                         state.quit_to_menu(app_game);
@@ -470,7 +479,7 @@ async fn grab_powerup(state: State<'_, AppStateHandle>) -> Result {
 #[specta::specta]
 /// (Screen: Game) Use the currently held powerup in the player's held_powerup. Does nothing if the
 /// player has none. Returns the updated game state
-async fn use_powerup(state: State<'_, AppStateHandle>) -> Result {
+async fn activate_powerup(state: State<'_, AppStateHandle>) -> Result {
     let game = state.read().await.get_game()?;
     game.use_powerup().await;
     Ok(())
@@ -488,6 +497,7 @@ async fn get_current_replay_history(state: State<'_, AppStateHandle>) -> Result<
 
 pub fn mk_specta() -> tauri_specta::Builder {
     tauri_specta::Builder::<tauri::Wry>::new()
+        .error_handling(ErrorHandlingMode::Throw)
         .commands(collect_commands![
             start_lobby,
             get_profile,
@@ -500,7 +510,7 @@ pub fn mk_specta() -> tauri_specta::Builder {
             host_start_game,
             mark_caught,
             grab_powerup,
-            use_powerup,
+            activate_powerup,
             check_room_code,
             get_profiles,
             replay_game,

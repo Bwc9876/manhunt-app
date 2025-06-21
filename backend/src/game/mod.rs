@@ -117,7 +117,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
         }
     }
 
-    async fn consume_event(&self, state: &mut GameState, event: GameEvent) -> Result {
+    async fn consume_event(&self, state: &mut GameState, event: GameEvent) -> Result<bool> {
         if !state.game_ended() {
             state.event_history.push((Utc::now(), event.clone()));
         }
@@ -126,7 +126,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
             GameEvent::Ping(player_ping) => state.add_ping(player_ping),
             GameEvent::ForcePing(target, display) => {
                 if target != state.id {
-                    return Ok(());
+                    return Ok(false);
                 }
 
                 let ping = if let Some(display) = display {
@@ -149,7 +149,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
                 state.remove_player(id);
             }
             GameEvent::TransportDisconnect => {
-                bail!("Transport disconnected");
+                return Ok(true);
             }
             GameEvent::TransportError(err) => {
                 bail!("Transport error: {err}");
@@ -161,7 +161,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
 
         self.state_update_sender.send_update();
 
-        Ok(())
+        Ok(false)
     }
 
     /// Perform a tick for a specific moment in time
@@ -253,7 +253,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
     }
 
     /// Main loop of the game, handles ticking and receiving messages from [Transport].
-    pub async fn main_loop(&self) -> Result<GameHistory> {
+    pub async fn main_loop(&self) -> Result<Option<GameHistory>> {
         let mut interval = tokio::time::interval(self.interval);
 
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -265,8 +265,13 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
                 events = self.transport.receive_messages() => {
                     let mut state = self.state.write().await;
                     for event in events {
-                        if let Err(why) = self.consume_event(&mut state, event).await {
-                            break 'game Err(why);
+                        match self.consume_event(&mut state, event).await {
+                            Ok(should_break) => {
+                                if should_break {
+                                break 'game Ok(None);
+                                }
+                            }
+                            Err(why) => { break 'game Err(why); }
                         }
                     }
                 }
@@ -277,7 +282,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
 
                     if should_break {
                         let history = state.as_game_history();
-                        break Ok(history);
+                        break Ok(Some(history));
                     }
                 }
             }

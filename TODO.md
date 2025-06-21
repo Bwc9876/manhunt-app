@@ -20,5 +20,6 @@
 - [x] Signaling: All of it
 - [x] Backend : Better transport error handling
 - [ ] Backend : Abstract lobby? Separate crate?
+- [x] Transport : Handle transport cancellation better
 - [x] Backend : Add checks for when the `powerup_locations` field is an empty array in settings
 - [ ] Backend : More tests

@@ -9,237 +9,131 @@ export const commands = {
      * (Screen: Menu) Start/Join a new lobby, set `join_code` to `null` to be host,
      * set it to a join code to be a client. This triggers a screen change to [AppScreen::Lobby]
      */
-    async startLobby(
-        joinCode: string | null,
-        settings: GameSettings
-    ): Promise<Result<null, string>> {
-        try {
-            return {
-                status: "ok",
-                data: await TAURI_INVOKE("start_lobby", { joinCode, settings })
-            };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async startLobby(joinCode: string | null, settings: GameSettings): Promise<null> {
+        return await TAURI_INVOKE("start_lobby", { joinCode, settings });
     },
     /**
      * (Screen: Menu) Get the user's player profile
      */
-    async getProfile(): Promise<Result<PlayerProfile, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_profile") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async getProfile(): Promise<PlayerProfile> {
+        return await TAURI_INVOKE("get_profile");
     },
     /**
      * Quit a running game or leave a lobby
      */
-    async quitToMenu(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("quit_to_menu") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async quitToMenu(): Promise<null> {
+        return await TAURI_INVOKE("quit_to_menu");
     },
     /**
      * Get the screen the app should currently be on, returns [AppScreen]
      */
-    async getCurrentScreen(): Promise<Result<AppScreen, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_current_screen") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async getCurrentScreen(): Promise<AppScreen> {
+        return await TAURI_INVOKE("get_current_screen");
     },
     /**
      * (Screen: Menu) Update the player's profile and persist it
      */
-    async updateProfile(newProfile: PlayerProfile): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("update_profile", { newProfile }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async updateProfile(newProfile: PlayerProfile): Promise<null> {
+        return await TAURI_INVOKE("update_profile", { newProfile });
     },
     /**
      * (Screen: Lobby) Get the current state of the lobby, call after receiving an update event
      */
-    async getLobbyState(): Promise<Result<LobbyState, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_lobby_state") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async getLobbyState(): Promise<LobbyState> {
+        return await TAURI_INVOKE("get_lobby_state");
     },
     /**
      * (Screen: Lobby) HOST ONLY: Push new settings to everyone, does nothing on clients. Returns the
      * new lobby state
      */
-    async hostUpdateSettings(settings: GameSettings): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("host_update_settings", { settings }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async hostUpdateSettings(settings: GameSettings): Promise<null> {
+        return await TAURI_INVOKE("host_update_settings", { settings });
     },
     /**
      * (Screen: Lobby) Switch teams between seekers and hiders, returns the new [LobbyState]
      */
-    async switchTeams(seeker: boolean): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("switch_teams", { seeker }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async switchTeams(seeker: boolean): Promise<null> {
+        return await TAURI_INVOKE("switch_teams", { seeker });
     },
     /**
      * (Screen: Lobby) HOST ONLY: Start the game, stops anyone else from joining and switched screen
      * to AppScreen::Game.
      */
-    async hostStartGame(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("host_start_game") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async hostStartGame(): Promise<null> {
+        return await TAURI_INVOKE("host_start_game");
     },
     /**
      * (Screen: Game) Mark this player as caught, this player will become a seeker. Returns the new game state
      */
-    async markCaught(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("mark_caught") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async markCaught(): Promise<null> {
+        return await TAURI_INVOKE("mark_caught");
     },
     /**
      * (Screen: Game) Grab a powerup on the map, this should be called when the user is *in range* of
      * the powerup. Returns the new game state after rolling for the powerup
      */
-    async grabPowerup(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("grab_powerup") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async grabPowerup(): Promise<null> {
+        return await TAURI_INVOKE("grab_powerup");
     },
     /**
      * (Screen: Game) Use the currently held powerup in the player's held_powerup. Does nothing if the
      * player has none. Returns the updated game state
      */
-    async usePowerup(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("use_powerup") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async activatePowerup(): Promise<null> {
+        return await TAURI_INVOKE("activate_powerup");
     },
     /**
      * (Screen: Menu) Check if a room code is valid to join, use this before starting a game
      * for faster error checking.
      */
-    async checkRoomCode(code: string): Promise<Result<boolean, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("check_room_code", { code }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async checkRoomCode(code: string): Promise<boolean> {
+        return await TAURI_INVOKE("check_room_code", { code });
     },
     /**
      * (Screen: Game) Get all player profiles with display names and profile pictures for this game.
      * This value will never change and is fairly expensive to clone, so please minimize calls to
      * this command.
      */
-    async getProfiles(): Promise<Result<Partial<{ [key in string]: PlayerProfile }>, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_profiles") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async getProfiles(): Promise<Partial<{ [key in string]: PlayerProfile }>> {
+        return await TAURI_INVOKE("get_profiles");
     },
     /**
      * (Screen: Menu) Go to the game replay screen to replay the game history specified by id
      */
-    async replayGame(id: string): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("replay_game", { id }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async replayGame(id: string): Promise<null> {
+        return await TAURI_INVOKE("replay_game", { id });
     },
     /**
      * (Screen: Menu) Get a list of all previously played games, returns of list of DateTimes that represent when
      * each game started, use this as a key
      */
-    async listGameHistories(): Promise<Result<string[], string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("list_game_histories") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async listGameHistories(): Promise<string[]> {
+        return await TAURI_INVOKE("list_game_histories");
     },
     /**
      * (Screen: Replay) Get the game history that's currently being replayed. Try to limit calls to
      * this
      */
-    async getCurrentReplayHistory(): Promise<Result<AppGameHistory, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_current_replay_history") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async getCurrentReplayHistory(): Promise<AppGameHistory> {
+        return await TAURI_INVOKE("get_current_replay_history");
     },
     /**
      * (Screen: Game) Get the current settings for this game.
      */
-    async getGameSettings(): Promise<Result<GameSettings, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_game_settings") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async getGameSettings(): Promise<GameSettings> {
+        return await TAURI_INVOKE("get_game_settings");
     },
     /**
      * (Screen: Game) Get the current state of the game.
      */
-    async getGameState(): Promise<Result<GameUiState, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_game_state") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async getGameState(): Promise<GameUiState> {
+        return await TAURI_INVOKE("get_game_state");
     },
     /**
      * (Screen: Setup) Complete user setup and go to the menu screen
      */
-    async completeSetup(profile: PlayerProfile): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("complete_setup", { profile }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
+    async completeSetup(profile: PlayerProfile): Promise<null> {
+        return await TAURI_INVOKE("complete_setup", { profile });
     }
 };
 

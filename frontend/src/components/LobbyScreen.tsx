@@ -1,19 +1,13 @@
 import React from "react";
 import { commands } from "@/bindings";
-import { useTauriEvent } from "@/lib/hooks";
+import { sharedSwrConfig, useTauriEvent } from "@/lib/hooks";
 import useSWR from "swr";
-import { unwrapResult } from "@/lib/result";
 
 export default function LobbyScreen() {
     const { data: lobbyState, mutate } = useSWR(
         "fetch-lobby-state",
-        async () => {
-            return unwrapResult(await commands.getLobbyState());
-        },
-        {
-            suspense: true,
-            dedupingInterval: 100
-        }
+        commands.getLobbyState,
+        sharedSwrConfig
     );
 
     useTauriEvent("lobbyStateUpdate", () => {
@@ -21,15 +15,15 @@ export default function LobbyScreen() {
     });
 
     const setSeeker = async (seeker: boolean) => {
-        unwrapResult(await commands.switchTeams(seeker));
+        await commands.switchTeams(seeker);
     };
 
     const startGame = async () => {
-        unwrapResult(await commands.hostStartGame());
+        await commands.hostStartGame();
     };
 
     const quit = async () => {
-        unwrapResult(await commands.quitToMenu());
+        await commands.quitToMenu();
     };
 
     if (lobbyState.self_id === null) {
