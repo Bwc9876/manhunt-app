@@ -1,4 +1,5 @@
 import React from "react";
+import useSWR from "swr";
 import { AppScreen, commands } from "@/bindings";
 import { useTauriEvent } from "@/lib/hooks";
 import { unwrapResult } from "@/lib/result";
@@ -22,12 +23,18 @@ function ScreenRouter({ screen }: { screen: AppScreen }) {
     }
 }
 
-const startingScreen = unwrapResult(await commands.getCurrentScreen());
-
 export default function App() {
-    const [screen, setScreen] = React.useState<AppScreen>(startingScreen);
+    const { data: screen, mutate } = useSWR(
+        "fetch-screen",
+        async () => {
+            return unwrapResult(await commands.getCurrentScreen());
+        },
+        { suspense: true, dedupingInterval: 100 }
+    );
 
-    useTauriEvent("changeScreen", setScreen);
+    useTauriEvent("changeScreen", (newScreen) => {
+        mutate(newScreen);
+    });
 
     return (
         <>
