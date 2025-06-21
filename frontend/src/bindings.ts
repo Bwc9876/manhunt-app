@@ -378,6 +378,10 @@ export type GameUiState = {
      */
     game_started: string;
     /**
+     * When the game ended, when this is Option::Some, the game has ended
+     */
+    game_ended: string | null;
+    /**
      * The last time all hiders were pinged **in UTC**
      */
     last_global_ping: string | null;
@@ -397,7 +401,9 @@ export type LobbyState = {
      * True represents seeker, false hider
      */
     teams: Partial<{ [key in string]: boolean }>;
+    self_id: string | null;
     self_seeker: boolean;
+    is_host: boolean;
     settings: GameSettings;
 };
 /**

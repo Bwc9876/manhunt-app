@@ -11,7 +11,7 @@ use crate::{
     game::GameSettings,
     prelude::*,
     profile::PlayerProfile,
-    server_url,
+    server,
     transport::{MatchboxTransport, TransportMessage},
 };
 
@@ -39,7 +39,9 @@ pub struct LobbyState {
     join_code: String,
     /// True represents seeker, false hider
     teams: HashMap<Uuid, bool>,
+    self_id: Option<Uuid>,
     self_seeker: bool,
+    is_host: bool,
     settings: GameSettings,
 }
 
@@ -59,7 +61,6 @@ pub struct LobbyStateUpdate;
 
 impl Lobby {
     pub fn new(
-        ws_url_base: &str,
         join_code: &str,
         host: bool,
         profile: PlayerProfile,
@@ -68,10 +69,7 @@ impl Lobby {
     ) -> Self {
         Self {
             app,
-            transport: Arc::new(MatchboxTransport::new(&format!(
-                "{ws_url_base}/{join_code}{}",
-                if host { "?create" } else { "" }
-            ))),
+            transport: Arc::new(MatchboxTransport::new(join_code, host)),
             is_host: host,
             self_profile: profile,
             join_code: join_code.to_string(),
@@ -80,6 +78,8 @@ impl Lobby {
                 join_code: join_code.to_string(),
                 profiles: HashMap::with_capacity(5),
                 self_seeker: false,
+                self_id: None,
+                is_host: host,
                 settings,
             }),
         }
@@ -108,6 +108,11 @@ impl Lobby {
     pub async fn switch_teams(&self, seeker: bool) {
         let mut state = self.state.lock().await;
         state.self_seeker = seeker;
+        if let Some(id) = state.self_id {
+            if let Some(state_seeker) = state.teams.get_mut(&id) {
+                *state_seeker = seeker;
+            }
+        }
         drop(state);
         self.transport
             .send_transport_message(None, LobbyMessage::PlayerSwitch(seeker).into())
@@ -131,32 +136,25 @@ impl Lobby {
         self.transport.send_transport_message(id, msg.into()).await
     }
 
-    async fn singaling_mark_started(&self) -> Result {
-        let url = format!("{}/mark_started/{}", server_url(), &self.join_code);
-        let client = reqwest::Client::builder().build()?;
-        client.post(url).send().await?.error_for_status()?;
-        Ok(())
+    async fn signaling_mark_started(&self) -> Result {
+        server::mark_room_started(&self.join_code).await
     }
 
     /// (Host) Start the game
     pub async fn start_game(&self) {
         if self.is_host {
-            if let Some(my_id) = self.transport.get_my_id().await {
-                let mut state = self.state.lock().await;
-                let seeker = state.self_seeker;
-                state.teams.insert(my_id, seeker);
-                let start_game_info = StartGameInfo {
-                    settings: state.settings.clone(),
-                    initial_caught_state: state.teams.clone(),
-                };
-                drop(state);
-                let msg = LobbyMessage::StartGame(start_game_info);
-                self.send_transport_message(None, msg).await;
-                if let Err(why) = self.singaling_mark_started().await {
-                    warn!("Failed to tell signalling server that the match started: {why:?}");
-                }
-                self.emit_state_update();
+            let state = self.state.lock().await;
+            let start_game_info = StartGameInfo {
+                settings: state.settings.clone(),
+                initial_caught_state: state.teams.clone(),
+            };
+            drop(state);
+            let msg = LobbyMessage::StartGame(start_game_info);
+            self.send_transport_message(None, msg).await;
+            if let Err(why) = self.signaling_mark_started().await {
+                warn!("Failed to tell signalling server that the match started: {why:?}");
             }
+            self.emit_state_update();
         }
     }
 
@@ -175,6 +173,13 @@ impl Lobby {
 
             for (peer, msg) in msgs {
                 match msg {
+                    TransportMessage::IdAssigned(id) => {
+                        let mut state = self.state.lock().await;
+                        state.self_id = Some(id);
+                        let seeker = state.self_seeker;
+                        state.teams.insert(id, seeker);
+                        state.profiles.insert(id, self.self_profile.clone());
+                    }
                     TransportMessage::Disconnected => {
                         break 'lobby Err(anyhow!(
                             "Transport disconnected before lobby could start game"
@@ -193,13 +198,13 @@ impl Lobby {
                             state.settings = game_settings;
                         }
                         LobbyMessage::StartGame(start_game_info) => {
-                            break 'lobby Ok((
-                                self.transport
-                                    .get_my_id()
-                                    .await
-                                    .expect("Error getting self ID"),
-                                start_game_info,
-                            ));
+                            let id = self
+                                .state
+                                .lock()
+                                .await
+                                .self_id
+                                .expect("Error getting self ID");
+                            break 'lobby Ok((id, start_game_info));
                         }
                         LobbyMessage::PlayerSwitch(seeker) => {
                             let mut state = self.state.lock().await;

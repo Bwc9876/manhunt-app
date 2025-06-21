@@ -395,6 +395,7 @@ impl GameState {
             available_powerup: self.available_powerup,
             pings: self.pings.clone(),
             game_started: self.game_started,
+            game_ended: self.game_ended,
             last_global_ping: self.last_global_ping,
             held_powerup: self.held_powerup,
             seekers_started: self.seekers_started,
@@ -428,6 +429,8 @@ pub struct GameUiState {
     pings: HashMap<Uuid, PlayerPing>,
     /// When the game was started **in UTC**
     game_started: UtcDT,
+    /// When the game ended, when this is Option::Some, the game has ended
+    game_ended: Option<UtcDT>,
     /// The last time all hiders were pinged **in UTC**
     last_global_ping: Option<UtcDT>,
     /// The [PowerUpType] the local player is holding

@@ -10,6 +10,10 @@ setup-frontend:
 dev:
     cargo tauri dev
 
+# Start a webview window *without* running the frontend, only one frontend needs to run at once
+dev-window:
+    cargo run -p manhunt-app
+
 # Format everything
 fmt:
     cargo fmt

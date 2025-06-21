@@ -16,6 +16,7 @@ use crate::{
     game::{GameEvent, Transport},
     lobby::LobbyMessage,
     prelude::*,
+    server,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -28,6 +29,8 @@ pub struct TransportChunk {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum TransportMessage {
+    /// The transport has received a peer id
+    IdAssigned(Uuid),
     /// Message related to the actual game
     /// Boxed for space reasons
     Game(Box<GameEvent>),
@@ -124,12 +127,12 @@ pub struct MatchboxTransport {
 }
 
 impl MatchboxTransport {
-    pub fn new(ws_url: &str) -> Self {
+    pub fn new(join_code: &str, is_host: bool) -> Self {
         let (itx, irx) = tokio::sync::mpsc::channel(15);
         let (otx, orx) = tokio::sync::mpsc::channel(15);
 
         Self {
-            ws_url: ws_url.to_string(),
+            ws_url: server::room_url(join_code, is_host),
             incoming: (itx, Mutex::new(irx)),
             outgoing: (otx, Mutex::new(orx)),
             my_id: RwLock::new(None),
@@ -152,10 +155,6 @@ impl MatchboxTransport {
         buffer
     }
 
-    pub async fn get_my_id(&self) -> Option<Uuid> {
-        *self.my_id.read().await
-    }
-
     async fn push_incoming(&self, id: Uuid, msg: TransportMessage) {
         self.incoming
             .0
@@ -168,9 +167,15 @@ impl MatchboxTransport {
         &self,
         socket: &mut WebRtcSocket,
         all_peers: &HashSet<PeerId>,
-        messages: impl Iterator<Item = OutgoingMsgPair>,
+        messages: &mut Vec<OutgoingMsgPair>,
     ) {
-        let packets = messages.flat_map(|(id, msg)| {
+        if let Some(my_id) = *self.my_id.read().await {
+            for (_, msg) in messages.iter().filter(|(id, _)| id.is_none()) {
+                self.push_incoming(my_id, msg.clone()).await;
+            }
+        }
+
+        let packets = messages.drain(..).flat_map(|(id, msg)| {
             msg.to_packets()
                 .into_iter()
                 .map(move |packet| (id, packet.into_boxed_slice()))
@@ -293,6 +298,8 @@ impl MatchboxTransport {
                 if let Some(new_id) = socket.id() {
                     my_id = Some(new_id.0);
                     *self.my_id.write().await = Some(new_id.0);
+                    self.push_incoming(new_id.0, TransportMessage::IdAssigned(new_id.0))
+                        .await;
                 }
             }
 
@@ -311,7 +318,8 @@ impl MatchboxTransport {
                 }
 
                 _ = outgoing_rx.recv_many(&mut buffer, 30) => {
-                    self.handle_send(&mut socket, &all_peers, buffer.drain(..)).await;
+
+                    self.handle_send(&mut socket, &all_peers, &mut buffer).await;
                 }
 
                 _ = &mut loop_fut => {

@@ -3,6 +3,7 @@ mod history;
 mod lobby;
 mod location;
 mod profile;
+mod server;
 mod transport;
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -11,9 +12,8 @@ use game::{Game as BaseGame, GameSettings};
 use history::AppGameHistory;
 use lobby::{Lobby, LobbyState, StartGameInfo};
 use location::TauriLocation;
-use log::{error, warn};
+use log::{error, info, warn, LevelFilter};
 use profile::PlayerProfile;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_specta::{collect_commands, collect_events, Event};
@@ -60,14 +60,6 @@ fn generate_join_code() -> String {
 
 const GAME_TICK_RATE: Duration = Duration::from_secs(1);
 
-pub const fn server_url() -> &'static str {
-    if let Some(url) = option_env!("APP_SERVER_URL") {
-        url
-    } else {
-        "ws://localhost:3536"
-    }
-}
-
 /// The app is changing screens, contains the screen it's switching to
 #[derive(Serialize, Deserialize, Clone, Debug, specta::Type, tauri_specta::Event)]
 struct ChangeScreen(AppScreen);
@@ -104,6 +96,7 @@ impl AppState {
                 state_updates,
             ));
             *self = AppState::Game(game.clone(), profiles.clone());
+            Self::emit_screen_change(&app, AppScreen::Game);
             tokio::spawn(async move {
                 let res = game.main_loop().await;
                 let app2 = app.clone();
@@ -212,7 +205,6 @@ impl AppState {
             let host = join_code.is_none();
             let room_code = join_code.unwrap_or_else(generate_join_code);
             let lobby = Arc::new(Lobby::new(
-                server_url(),
                 &room_code,
                 host,
                 profile.clone(),
@@ -228,6 +220,7 @@ impl AppState {
                 let mut state = state_handle.write().await;
                 match res {
                     Ok((my_id, start)) => {
+                        info!("Starting game as {my_id}");
                         state.start_game(app_game, my_id, start).await;
                     }
                     Err(why) => {
@@ -344,11 +337,9 @@ async fn replay_game(id: UtcDT, app: AppHandle, state: State<'_, AppStateHandle>
 #[specta::specta]
 /// (Screen: Menu) Check if a room code is valid to join, use this before starting a game
 /// for faster error checking.
-async fn check_room_code(code: &str) -> Result<bool, String> {
-    let url = format!("{}/room_exists/{code}", server_url());
-    reqwest::get(url)
+async fn check_room_code(code: &str) -> Result<bool> {
+    server::room_exists(code)
         .await
-        .map(|resp| resp.status() == StatusCode::OK)
         .map_err(|err| err.to_string())
 }
 
@@ -523,7 +514,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(LevelFilter::Debug)
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_geolocation::init())
         .plugin(tauri_plugin_store::Builder::default().build())
