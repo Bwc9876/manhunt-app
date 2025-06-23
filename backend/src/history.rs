@@ -1,14 +1,15 @@
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, result::Result as StdResult, sync::Arc};
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::{Store, StoreExt};
 use uuid::Uuid;
 
-use crate::{
-    game::{GameHistory, UtcDT},
-    prelude::*,
-    profile::PlayerProfile,
-};
+use manhunt_logic::{GameHistory, PlayerProfile};
+
+use crate::UtcDT;
+
+type Result<T = (), E = anyhow::Error> = StdResult<T, E>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct AppGameHistory {

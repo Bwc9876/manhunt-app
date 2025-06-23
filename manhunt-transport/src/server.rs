@@ -1,6 +1,6 @@
 use reqwest::StatusCode;
 
-use crate::prelude::*;
+use manhunt_logic::prelude::*;
 
 const fn server_host() -> &'static str {
     if let Some(host) = option_env!("SIGNAL_SERVER_HOST") {
@@ -27,19 +27,11 @@ const fn server_secure() -> bool {
 }
 
 const fn server_ws_proto() -> &'static str {
-    if server_secure() {
-        "wss"
-    } else {
-        "ws"
-    }
+    if server_secure() { "wss" } else { "ws" }
 }
 
 const fn server_http_proto() -> &'static str {
-    if server_secure() {
-        "https"
-    } else {
-        "http"
-    }
+    if server_secure() { "https" } else { "http" }
 }
 
 const SERVER_HOST: &str = server_host();
@@ -76,4 +68,11 @@ pub async fn mark_room_started(code: &str) -> Result {
         .error_for_status()
         .context("Server returned error")?;
     Ok(())
+}
+
+pub fn generate_join_code() -> String {
+    // 5 character sequence of A-Z
+    (0..5)
+        .map(|_| (b'A' + rand::random_range(0..26)) as char)
+        .collect::<String>()
 }

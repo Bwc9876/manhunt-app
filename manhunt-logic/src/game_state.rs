@@ -10,13 +10,12 @@ use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::GameEvent;
-
-use super::{
+use crate::{
+    game::{Id, UtcDT},
+    game_events::GameEvent,
     location::Location,
     powerups::PowerUpType,
     settings::{GameSettings, PingStartCondition},
-    Id, UtcDT,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

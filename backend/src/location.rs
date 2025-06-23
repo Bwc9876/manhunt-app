@@ -1,7 +1,7 @@
 use tauri::AppHandle;
 use tauri_plugin_geolocation::{GeolocationExt, PositionOptions};
 
-use crate::game::{Location, LocationService};
+use manhunt_logic::{Location, LocationService};
 
 pub struct TauriLocation(AppHandle);
 

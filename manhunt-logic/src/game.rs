@@ -1,28 +1,25 @@
+use anyhow::bail;
 use chrono::{DateTime, Utc};
-pub use events::GameEvent;
-use powerups::PowerUpType;
-pub use settings::GameSettings;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
 use tokio::{sync::RwLock, time::MissedTickBehavior};
 
-mod events;
-mod location;
-mod powerups;
-mod settings;
-mod state;
-mod transport;
+use crate::StartGameInfo;
+use crate::{prelude::*, transport::TransportMessage};
 
-use crate::prelude::*;
-
-pub use location::{Location, LocationService};
-pub use state::{GameHistory, GameState, GameUiState};
-pub use transport::Transport;
+use crate::{
+    game_events::GameEvent,
+    game_state::{GameHistory, GameState, GameUiState},
+    location::LocationService,
+    powerups::PowerUpType,
+    settings::GameSettings,
+    transport::Transport,
+};
 
 pub type Id = Uuid;
 
-/// Convenence alias for UTC DT
+/// Convenience alias for UTC DT
 pub type UtcDT = DateTime<Utc>;
 
 pub trait StateUpdateSender {
@@ -42,15 +39,17 @@ pub struct Game<L: LocationService, T: Transport, S: StateUpdateSender> {
 
 impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
     pub fn new(
-        my_id: Id,
         interval: Duration,
-        initial_caught_state: HashMap<Id, bool>,
-        settings: GameSettings,
+        start_info: StartGameInfo,
         transport: Arc<T>,
         location: L,
         state_update_sender: S,
     ) -> Self {
-        let state = GameState::new(settings, my_id, initial_caught_state);
+        let state = GameState::new(
+            start_info.settings,
+            transport.self_id(),
+            start_info.initial_caught_state,
+        );
 
         Self {
             transport,
@@ -61,6 +60,10 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
         }
     }
 
+    async fn send_event(&self, event: GameEvent) {
+        self.transport.send_message(event.into()).await;
+    }
+
     pub async fn mark_caught(&self) {
         let mut state = self.state.write().await;
         let id = state.id;
@@ -69,9 +72,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
         // TODO: Maybe reroll for new powerups (specifically seeker ones) instead of just erasing it
         state.use_powerup();
 
-        self.transport
-            .send_message(GameEvent::PlayerCaught(state.id))
-            .await;
+        self.send_event(GameEvent::PlayerCaught(state.id)).await;
     }
 
     pub async fn clone_settings(&self) -> GameSettings {
@@ -85,9 +86,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
     pub async fn get_powerup(&self) {
         let mut state = self.state.write().await;
         state.get_powerup();
-        self.transport
-            .send_message(GameEvent::PowerupDespawn(state.id))
-            .await;
+        self.send_event(GameEvent::PowerupDespawn(state.id)).await;
     }
 
     pub async fn use_powerup(&self) {
@@ -98,9 +97,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
                 PowerUpType::PingSeeker => {}
                 PowerUpType::PingAllSeekers => {
                     for seeker in state.iter_seekers() {
-                        self.transport
-                            .send_message(GameEvent::ForcePing(seeker, None))
-                            .await;
+                        self.send_event(GameEvent::ForcePing(seeker, None)).await;
                     }
                 }
                 PowerUpType::ForcePingOther => {
@@ -108,16 +105,14 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
                     let target = state.random_other_hider().or_else(|| state.random_seeker());
 
                     if let Some(target) = target {
-                        self.transport
-                            .send_message(GameEvent::ForcePing(target, None))
-                            .await;
+                        self.send_event(GameEvent::ForcePing(target, None)).await;
                     }
                 }
             }
         }
     }
 
-    async fn consume_event(&self, state: &mut GameState, event: GameEvent) -> Result<bool> {
+    async fn consume_event(&self, state: &mut GameState, event: GameEvent) {
         if !state.game_ended() {
             state.event_history.push((Utc::now(), event.clone()));
         }
@@ -126,7 +121,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
             GameEvent::Ping(player_ping) => state.add_ping(player_ping),
             GameEvent::ForcePing(target, display) => {
                 if target != state.id {
-                    return Ok(false);
+                    return;
                 }
 
                 let ping = if let Some(display) = display {
@@ -137,7 +132,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
 
                 if let Some(ping) = ping {
                     state.add_ping(ping.clone());
-                    self.transport.send_message(GameEvent::Ping(ping)).await;
+                    self.send_event(GameEvent::Ping(ping)).await;
                 }
             }
             GameEvent::PowerupDespawn(_) => state.despawn_powerup(),
@@ -145,23 +140,36 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
                 state.mark_caught(player);
                 state.remove_ping(player);
             }
-            GameEvent::DroppedPlayer(id) => {
-                state.remove_player(id);
-            }
-            GameEvent::TransportDisconnect => {
-                return Ok(true);
-            }
-            GameEvent::TransportError(err) => {
-                bail!("Transport error: {err}");
-            }
             GameEvent::PostGameSync(id, history) => {
                 state.insert_player_location_history(id, history);
             }
         }
 
         self.state_update_sender.send_update();
+    }
 
-        Ok(false)
+    async fn consume_message(
+        &self,
+        state: &mut GameState,
+        _id: Option<Uuid>,
+        msg: TransportMessage,
+    ) -> Result<bool> {
+        match msg {
+            TransportMessage::Game(event) => {
+                self.consume_event(state, *event).await;
+                Ok(false)
+            }
+            TransportMessage::PeerDisconnect(id) => {
+                state.remove_player(id);
+                Ok(false)
+            }
+            TransportMessage::Disconnected => {
+                // Expected disconnect, exit
+                Ok(true)
+            }
+            TransportMessage::Error(err) => bail!("Transport error: {err}"),
+            _ => Ok(false),
+        }
     }
 
     /// Perform a tick for a specific moment in time
@@ -172,7 +180,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
         if state.check_end_game() {
             // If we're at the point where the game is over, send out our location history
             let msg = GameEvent::PostGameSync(state.id, state.location_history.clone());
-            self.transport.send_message(msg).await;
+            self.send_event(msg).await;
             send_update = true;
         }
 
@@ -208,15 +216,15 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
                 // We have a powerup that lets us ping a seeker as us, use it.
                 if let Some(seeker) = state.random_seeker() {
                     state.use_powerup();
-                    self.transport
-                        .send_message(GameEvent::ForcePing(seeker, Some(state.id)))
+                    self.send_event(GameEvent::ForcePing(seeker, Some(state.id)))
                         .await;
                     state.start_pings(now);
                 }
             } else {
                 // No powerup, normal ping
                 if let Some(ping) = state.create_self_ping() {
-                    self.transport.send_message(GameEvent::Ping(ping)).await;
+                    self.send_event(GameEvent::Ping(ping.clone())).await;
+                    state.add_ping(ping);
                     state.start_pings(now);
                 }
             }
@@ -248,8 +256,8 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
         self.tick(&mut state, now).await;
     }
 
-    pub fn quit_game(&self) {
-        self.transport.disconnect();
+    pub async fn quit_game(&self) {
+        self.transport.disconnect().await;
     }
 
     /// Main loop of the game, handles ticking and receiving messages from [Transport].
@@ -262,13 +270,13 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
             tokio::select! {
                 biased;
 
-                events = self.transport.receive_messages() => {
+                messages = self.transport.receive_messages() => {
                     let mut state = self.state.write().await;
-                    for event in events {
-                        match self.consume_event(&mut state, event).await {
+                    for (id, msg) in messages {
+                        match self.consume_message(&mut state, id, msg).await {
                             Ok(should_break) => {
                                 if should_break {
-                                break 'game Ok(None);
+                                    break 'game Ok(None);
                                 }
                             }
                             Err(why) => { break 'game Err(why); }
@@ -288,7 +296,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
             }
         };
 
-        self.transport.disconnect();
+        self.transport.disconnect().await;
 
         res
     }
@@ -296,53 +304,16 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
 
-    use crate::game::{location::Location, settings::PingStartCondition};
+    use crate::{
+        location::Location,
+        settings::PingStartCondition,
+        tests::{DummySender, MockLocation, MockTransport},
+    };
 
     use super::*;
-    use tokio::{sync::Mutex, task::yield_now, test};
-
-    type GameEventRx = tokio::sync::mpsc::Receiver<GameEvent>;
-    type GameEventTx = tokio::sync::mpsc::Sender<GameEvent>;
-
-    struct MockTransport {
-        rx: Mutex<GameEventRx>,
-        txs: Vec<GameEventTx>,
-    }
-
-    impl Transport for MockTransport {
-        async fn receive_messages(&self) -> impl Iterator<Item = GameEvent> {
-            let mut rx = self.rx.lock().await;
-            let mut buf = Vec::with_capacity(20);
-            rx.recv_many(&mut buf, 20).await;
-            buf.into_iter()
-        }
-
-        async fn send_message(&self, msg: GameEvent) {
-            for tx in self.txs.iter() {
-                tx.send(msg.clone()).await.expect("Failed to send msg");
-            }
-        }
-    }
-
-    struct MockLocation;
-
-    impl LocationService for MockLocation {
-        fn get_loc(&self) -> Option<Location> {
-            Some(location::Location {
-                lat: 0.0,
-                long: 0.0,
-                heading: None,
-            })
-        }
-    }
-
-    struct DummySender;
-
-    impl StateUpdateSender for DummySender {
-        fn send_update(&self) {}
-    }
+    use tokio::{task::yield_now, test};
 
     type TestGame = Game<MockLocation, MockTransport, DummySender>;
 
@@ -357,36 +328,24 @@ mod tests {
 
     impl MockMatch {
         pub fn new(settings: GameSettings, players: u32, seekers: u32) -> Self {
-            let uuids = (0..players)
-                .map(|_| uuid::Uuid::new_v4())
-                .collect::<Vec<_>>();
-
-            let channels = (0..players)
-                .map(|_| tokio::sync::mpsc::channel(10))
-                .collect::<Vec<_>>();
+            let (uuids, transports) = MockTransport::create_mesh(players);
 
             let initial_caught_state = (0..players)
                 .map(|id| (uuids[id as usize], id < seekers))
                 .collect::<HashMap<_, _>>();
-            let txs = channels
-                .iter()
-                .map(|(tx, _)| tx.clone())
-                .collect::<Vec<_>>();
 
-            let games = channels
+            let games = transports
                 .into_iter()
                 .enumerate()
-                .map(|(id, (_, rx))| {
-                    let transport = MockTransport {
-                        rx: Mutex::new(rx),
-                        txs: txs.clone(),
-                    };
+                .map(|(id, transport)| {
                     let location = MockLocation;
+                    let start_info = StartGameInfo {
+                        initial_caught_state: initial_caught_state.clone(),
+                        settings: settings.clone(),
+                    };
                     let game = TestGame::new(
-                        uuids[id],
                         INTERVAL,
-                        initial_caught_state.clone(),
-                        settings.clone(),
+                        start_info,
                         Arc::new(transport),
                         location,
                         DummySender,
@@ -495,7 +454,11 @@ mod tests {
         })
         .await;
 
-        // Game over, See TODO in main_loop for more assertions
+        // Extra tick for post-game syncing
+        mat.tick().await;
+
+        mat.assert_all_states(|s| assert!(s.game_ended(), "Game {} has not ended", s.id))
+            .await;
     }
 
     #[test]
@@ -675,6 +638,36 @@ mod tests {
                     s.get_caught(mat.uuids[id]).is_some(),
                     "Player {} should be pinged due to the powerup (in {})",
                     id,
+                    s.id
+                );
+            }
+        })
+        .await;
+    }
+
+    #[test]
+    async fn test_player_dropped() {
+        let settings = mk_settings();
+        let mat = MockMatch::new(settings, 4, 1);
+
+        mat.start().await;
+
+        let game = mat.game(2);
+        game.quit_game().await;
+        let id = game.state.read().await.id;
+
+        mat.tick().await;
+
+        mat.assert_all_states(|s| {
+            if s.id != id {
+                assert!(
+                    s.get_ping(id).is_none(),
+                    "Game {} has not removed 2 from pings",
+                    s.id
+                );
+                assert!(
+                    s.get_caught(id).is_none(),
+                    "Game {} has not removed 2 from caught state",
                     s.id
                 );
             }
