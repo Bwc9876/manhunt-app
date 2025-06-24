@@ -7,7 +7,6 @@ import MenuScreen from "./MenuScreen";
 import LobbyScreen from "./LobbyScreen";
 import GameScreen from "./GameScreen";
 
-
 function ScreenRouter({ screen }: { screen: AppScreen }) {
     switch (screen) {
         case "Setup":

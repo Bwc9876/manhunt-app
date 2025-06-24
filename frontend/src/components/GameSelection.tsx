@@ -1,4 +1,1 @@
-export default function GameSelection() {
-
-    
-}
+export default function GameSelection() {}
