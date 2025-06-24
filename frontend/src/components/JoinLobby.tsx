@@ -24,7 +24,7 @@ export default function JoinLobby({ settings }: { settings: GameSettings }) {
     return (
         <div className="flex flex-col items-center justify-center p-3.5">
             <input
-                className="text-center px- py-3 m-5 rounded-md border-2 border-gray-200"
+                className="text-center py-3 m-5 rounded-md border-2 border-gray-200"
                 placeholder="Room Code"
                 onChange={(e) => setRoomCode(e.target.value)}
             ></input>
