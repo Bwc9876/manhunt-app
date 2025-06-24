@@ -187,20 +187,7 @@ export type GameEvent =
      * Contains location history of the given player, used after the game to sync location
      * histories
      */
-    | { PostGameSync: [string, [string, Location][]] }
-    /**
-     * A player has been disconnected and removed from the game (because of error or otherwise).
-     * The player should be removed from all state
-     */
-    | { DroppedPlayer: string }
-    /**
-     * The underlying transport has disconnected
-     */
-    | "TransportDisconnect"
-    /**
-     * The underlying transport encountered an error
-     */
-    | { TransportError: string };
+    | { PostGameSync: [string, [string, Location][]] };
 export type GameHistory = {
     my_id: string;
     game_started: string;
@@ -247,8 +234,7 @@ export type GameSettings = {
     powerup_locations: Location[];
 };
 /**
- * The state of the game has updated in some way, you're expected to call [get_game_state] when
- * receiving this
+ * The state of the game has changed
  */
 export type GameStateUpdate = null;
 /**
@@ -303,14 +289,12 @@ export type LobbyState = {
      * True represents seeker, false hider
      */
     teams: Partial<{ [key in string]: boolean }>;
-    self_id: string | null;
-    self_seeker: boolean;
+    self_id: string;
     is_host: boolean;
     settings: GameSettings;
 };
 /**
- * The lobby state has updated in some way, you're expected to call [get_lobby_state] after
- * receiving this
+ * The state of the lobby has changed
  */
 export type LobbyStateUpdate = null;
 /**

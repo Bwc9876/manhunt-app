@@ -71,6 +71,7 @@
           alejandra
           harfbuzz
           librsvg
+          gradle
           libsoup_3
           just
           pango

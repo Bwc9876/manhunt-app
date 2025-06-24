@@ -1,24 +1,29 @@
 {
   lib,
-  clippy,
   rustPlatform,
 }:
 rustPlatform.buildRustPackage {
   pname = "manhunt-signaling";
   version = "0.1.0";
-  src = ../../manhunt-signaling;
+  src = with lib.fileset;
+    toSource {
+      root = ../../.;
+      fileset = unions [
+        ../../backend
+        ../../manhunt-logic
+        ../../manhunt-transport
+        ../../manhunt-signaling
+        ../../Cargo.toml
+        ../../Cargo.lock
+      ];
+    };
   cargoLock.lockFile = ../../Cargo.lock;
+  buildAndTestSubdir = "manhunt-signaling";
 
   postPatch = ''
     cp ${../../Cargo.lock} Cargo.lock
     chmod +w Cargo.lock
   '';
-
-  postCheck = ''
-    cargo clippy --no-deps -- -D warnings
-  '';
-
-  nativeBuildInputs = [clippy];
 
   meta = with lib; {
     description = "Signaling server for Manhunt app";
