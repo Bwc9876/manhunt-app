@@ -11,15 +11,17 @@ export default function SetupScreen() {
 
     return (
         <>
-            <input
-                name="displayName"
-                value={displayName}
-                placeholder="Display Name"
-                onChange={(e) => setName(e.target.value)}
-            />
-            <button disabled={displayName === ""} onClick={onSave}>
-                Save
-            </button>
+            <div className="rounded-lg w-2/5 h-1/5 bg-white">
+                <input
+                    name="displayName"
+                    value={displayName}
+                    placeholder="Display Name"
+                    onChange={(e) => setName(e.target.value)}
+                />
+                <button disabled={displayName === ""} onClick={onSave}>
+                    Save
+                </button>
+            </div>
         </>
     );
 }

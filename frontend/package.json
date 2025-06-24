@@ -10,12 +10,14 @@
         "lint": "tsc && eslint --cache"
     },
     "dependencies": {
+        "@tailwindcss/vite": "^4.1.10",
         "@tauri-apps/api": "^2",
+        "@tauri-apps/plugin-dialog": "^2",
         "@tauri-apps/plugin-geolocation": "^2",
         "@tauri-apps/plugin-log": "^2",
         "@tauri-apps/plugin-notification": "^2",
         "@tauri-apps/plugin-opener": "^2",
-        "@tauri-apps/plugin-dialog": "^2",
+        "framer-motion": "^12.19.1",
         "react": "^19",
         "react-dom": "^19",
         "swr": "^2.3.3"
@@ -31,6 +33,7 @@
         "eslint-plugin-react-hooks": "^5",
         "globals": "^16",
         "prettier": "^3",
+        "tailwindcss": "^4.1.10",
         "typescript": "^5",
         "typescript-eslint": "^8",
         "vite": "^6"

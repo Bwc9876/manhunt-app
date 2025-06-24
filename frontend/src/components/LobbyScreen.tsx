@@ -38,7 +38,7 @@ export default function LobbyScreen() {
 
             <button onClick={() => setSeeker(true)}>Become Seeker</button>
             <button onClick={() => setSeeker(false)}>Become Hider</button>
-
+            
             <h3>Seekers</h3>
             <ul>
                 {Object.keys(lobbyState.teams)

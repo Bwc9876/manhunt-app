@@ -59,38 +59,34 @@ export default function MenuScreen() {
 
     return (
         <>
-            {profile.pfp_base64 && (
+            <div className="flex flex-col items-center font-sans">
+                {profile.pfp_base64 && (
                 <img src={profile.pfp_base64} alt={`${profile.display_name}'s Profile Picture`} />
-            )}
-            <h2>Welcome, {profile.display_name}</h2>
-            <hr />
-            <h3>Play</h3>
-            <button onClick={() => onStartGame(null)}>Start Lobby</button>
-            <div>
+                )}
+
+                <h2 className="text-center text-lg font-semibold p-5">Welcome, {profile.display_name}</h2>
+                
+                <div className="flex flex-col items-center p-3.5">
+                    <input className="text-center px- py-3 m-5 rounded-md border-2 border-gray-200" placeholder="Room Code" onChange={(e) => setRoomCode(e.target.value)}></input>
+                    <button className="bg-blue-500 px-7 py-2 height text-white p-3.5 rounded-md" onClick={() => {onStartGame(roomCode)}} disabled={roomCode.length <= 0}>Join</button>
+                </div>
+
+
+                <h3>Edit Profile</h3>
                 <input
-                    value={roomCode}
-                    placeholder="Room Code"
-                    onChange={(e) => setRoomCode(e.target.value)}
+                    placeholder={profile.display_name}
+                    value={newName}
+                    onChange={(e) => setName(e.target.value)}
                 />
-                <button onClick={() => onStartGame(roomCode)} disabled={roomCode === ""}>
-                    Join Lobby
-                </button>
+                <button onClick={onSaveProfile}>Save</button>
+
+                <h3>Previous Games</h3>
+                <ul>
+                    {gameHistory.map((time) => (
+                        <li key={time}>{time}</li>
+                    ))}
+                </ul>
             </div>
-            <hr />
-            <h3>Edit Profile</h3>
-            <input
-                placeholder={profile.display_name}
-                value={newName}
-                onChange={(e) => setName(e.target.value)}
-            />
-            <button onClick={onSaveProfile}>Save</button>
-            <hr />
-            <h3>Previous Games</h3>
-            <ul>
-                {gameHistory.map((time) => (
-                    <li key={time}>{time}</li>
-                ))}
-            </ul>
         </>
     );
 }
