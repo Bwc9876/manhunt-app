@@ -4,7 +4,12 @@ import React, { Dispatch, SetStateAction } from "react";
 import useSWR from "swr";
 import NavButton from "./NavButton";
 import JoinLobby from "./JoinLobby";
-import { IoAddOutline, IoArrowForward, IoAccessibilityOutline, IoCalendarClearOutline } from "react-icons/io5";
+import {
+    IoAddOutline,
+    IoArrowForward,
+    IoAccessibilityOutline,
+    IoCalendarClearOutline
+} from "react-icons/io5";
 
 // Temp settings for now.
 const settings: GameSettings = {
@@ -58,22 +63,22 @@ function NavBar({
     return (
         <div className="w-full h-1/8 flex flex-row border-t-1 border-gray-300 fixed bottom-0">
             <NavButton current={state} setCurrent={setState} target={MenuState.Join}>
-                <IoArrowForward className="size-1/3"/>
+                <IoArrowForward className="size-1/3" />
                 Join
             </NavButton>
 
             <NavButton current={state} setCurrent={setState} target={MenuState.Create}>
-                <IoAddOutline className="size-1/3"/>
+                <IoAddOutline className="size-1/3" />
                 Create
             </NavButton>
 
             <NavButton current={state} setCurrent={setState} target={MenuState.Profile}>
-                <IoAccessibilityOutline className="size-1/3"/>
+                <IoAccessibilityOutline className="size-1/3" />
                 Profile
             </NavButton>
 
             <NavButton current={state} setCurrent={setState} target={MenuState.History}>
-                <IoCalendarClearOutline className="size-1/3"/>
+                <IoCalendarClearOutline className="size-1/3" />
                 History
             </NavButton>
         </div>
