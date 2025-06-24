@@ -4,37 +4,33 @@ import React, { Dispatch, SetStateAction } from "react";
 import useSWR from "swr";
 import { MenuState } from "./MenuScreen";
 
-export default function NavButton({
-    label,
-    current,
-    setCurrent,
-    target
-}: {
-    label: string;
+interface NavButtonProps extends React.PropsWithChildren {
     current: MenuState;
     setCurrent: Dispatch<SetStateAction<MenuState>>;
     target: MenuState;
-}) {
+}
+
+export default function NavButton({ current, setCurrent, target, children }: NavButtonProps) {
     if (current == target)
         return (
             <button
-                className="bg-transparent text-xs text-center text-blue-400 p-2.5 grow"
+                className="flex flex-col bg-transparent text-xs/6 text-center items-center align-middle text-blue-400 p-3.5 grow"
                 onClick={() => {
                     setCurrent(target);
                 }}
             >
-                {label}
+                {children}
             </button>
         );
 
     return (
         <button
-            className="bg-transparent text-xs text-center text-gray-600 p-2.5 grow"
+            className="flex flex-col bg-transparent text-xs/6 text-center items-center align-middle text-gray-500 p-3.5 grow"
             onClick={() => {
                 setCurrent(target);
             }}
         >
-            {label}
+            {children}
         </button>
     );
 }
