@@ -1,7 +1,4 @@
-import { commands, GameSettings } from "@/bindings";
-import { sharedSwrConfig } from "@/lib/hooks";
 import React, { Dispatch, SetStateAction } from "react";
-import useSWR from "swr";
 import { MenuState } from "./MenuScreen";
 
 interface NavButtonProps extends React.PropsWithChildren {

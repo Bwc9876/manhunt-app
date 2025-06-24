@@ -1,7 +1,5 @@
-import { commands, GameSettings } from "@/bindings";
-import { sharedSwrConfig } from "@/lib/hooks";
+import { GameSettings } from "@/bindings";
 import React, { Dispatch, SetStateAction } from "react";
-import useSWR from "swr";
 import NavButton from "./NavButton";
 import JoinLobby from "./JoinLobby";
 import {
@@ -10,6 +8,7 @@ import {
     IoAccessibilityOutline,
     IoCalendarClearOutline
 } from "react-icons/io5";
+import EditProfile from "./EditProfile";
 
 // Temp settings for now.
 const settings: GameSettings = {
@@ -45,7 +44,7 @@ export function MenuRouter({ state }: { state: MenuState }) {
             return <div>Create</div>;
 
         case MenuState.Profile:
-            return <div>Profile</div>;
+            return <EditProfile/>;
 
         case MenuState.History:
             return <div>History</div>;
@@ -86,25 +85,7 @@ function NavBar({
 }
 
 export default function MenuScreen() {
-    const [roomCode, setRoomCode] = React.useState("");
-    const [newName, setName] = React.useState("");
     const [state, setState] = React.useState(MenuState.Join);
-
-    const { data: profile, mutate: setProfile } = useSWR(
-        "fetch-profile",
-        commands.getProfile,
-        sharedSwrConfig
-    );
-    const { data: gameHistory } = useSWR(
-        "list-game-history",
-        commands.listGameHistories,
-        sharedSwrConfig
-    );
-
-    const onSaveProfile = async () => {
-        await commands.updateProfile({ ...profile, display_name: newName });
-        setProfile({ ...profile, display_name: newName });
-    };
 
     return (
         <div className="h-screen v-screen flex flex-col items-center justify-center font-sans">
