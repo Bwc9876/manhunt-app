@@ -35,7 +35,7 @@ export default function App() {
 
     return (
         <>
-            <h1>Screen: {screen}</h1>
+            {/* <h1>Screen: {screen}</h1> */}
             <ScreenRouter screen={screen} />
         </>
     );

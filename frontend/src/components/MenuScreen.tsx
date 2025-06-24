@@ -1,7 +1,9 @@
 import { commands, GameSettings } from "@/bindings";
 import { sharedSwrConfig } from "@/lib/hooks";
-import React from "react";
+import React, { Dispatch, SetStateAction } from "react";
 import useSWR from "swr";
+import NavButton from "./NavButton";
+import JoinLobby from "./JoinLobby";
 
 // Temp settings for now.
 const settings: GameSettings = {
@@ -21,9 +23,74 @@ const settings: GameSettings = {
     ]
 };
 
+export enum MenuState {
+    Join,
+    Create,
+    Profile,
+    History
+}
+
+export function MenuRouter({ state }: { state: MenuState }) {
+    switch (state) {
+        case MenuState.Join:
+            return <JoinLobby settings={settings} />;
+
+        case MenuState.Create:
+            return <div>Create</div>;
+
+        case MenuState.Profile:
+            return <div>Profile</div>;
+
+        case MenuState.History:
+            return <div>History</div>;
+    }
+    return <></>;
+}
+
+function NavBar({
+    state,
+    setState
+}: {
+    state: MenuState;
+    setState: Dispatch<SetStateAction<MenuState>>;
+}) {
+    return (
+        <div className="w-full h-1/8 flex flex-row justify-evenly align-top border-t-1 border-gray-300 fixed bottom-0">
+            <NavButton
+                label={"Join"}
+                current={state}
+                setCurrent={setState}
+                target={MenuState.Join}
+            />
+
+            <NavButton
+                label={"Create"}
+                current={state}
+                setCurrent={setState}
+                target={MenuState.Create}
+            />
+
+            <NavButton
+                label={"Profile"}
+                current={state}
+                setCurrent={setState}
+                target={MenuState.Profile}
+            />
+
+            <NavButton
+                label={"History"}
+                current={state}
+                setCurrent={setState}
+                target={MenuState.History}
+            />
+        </div>
+    );
+}
+
 export default function MenuScreen() {
     const [roomCode, setRoomCode] = React.useState("");
     const [newName, setName] = React.useState("");
+    const [state, setState] = React.useState(MenuState.Join);
 
     const { data: profile, mutate: setProfile } = useSWR(
         "fetch-profile",
@@ -36,73 +103,15 @@ export default function MenuScreen() {
         sharedSwrConfig
     );
 
-    const onStartGame = async (code: string | null) => {
-        if (code) {
-            try {
-                const validCode = await commands.checkRoomCode(code);
-                if (!validCode) {
-                    window.alert("Invalid Join Code");
-                    return;
-                }
-            } catch (e) {
-                window.alert(`Failed to connect to Server ${e}`);
-                return;
-            }
-        }
-        await commands.startLobby(code, settings);
-    };
-
     const onSaveProfile = async () => {
         await commands.updateProfile({ ...profile, display_name: newName });
         setProfile({ ...profile, display_name: newName });
     };
 
     return (
-        <>
-            <div className="flex flex-col items-center font-sans">
-                {profile.pfp_base64 && (
-                    <img
-                        src={profile.pfp_base64}
-                        alt={`${profile.display_name}'s Profile Picture`}
-                    />
-                )}
-
-                <h2 className="text-center text-lg font-semibold p-5">
-                    Welcome, {profile.display_name}
-                </h2>
-
-                <div className="flex flex-col items-center p-3.5">
-                    <input
-                        className="text-center px- py-3 m-5 rounded-md border-2 border-gray-200"
-                        placeholder="Room Code"
-                        onChange={(e) => setRoomCode(e.target.value)}
-                    ></input>
-                    <button
-                        className="bg-blue-500 px-7 py-2 height text-white p-3.5 rounded-md"
-                        onClick={() => {
-                            onStartGame(roomCode);
-                        }}
-                        disabled={roomCode.length <= 0}
-                    >
-                        Join
-                    </button>
-                </div>
-
-                <h3>Edit Profile</h3>
-                <input
-                    placeholder={profile.display_name}
-                    value={newName}
-                    onChange={(e) => setName(e.target.value)}
-                />
-                <button onClick={onSaveProfile}>Save</button>
-
-                <h3>Previous Games</h3>
-                <ul>
-                    {gameHistory.map((time) => (
-                        <li key={time}>{time}</li>
-                    ))}
-                </ul>
-            </div>
-        </>
+        <div className="h-screen v-screen flex flex-col items-center justify-center font-sans">
+            <MenuRouter state={state}></MenuRouter>
+            <NavBar state={state} setState={setState}></NavBar>
+        </div>
     );
 }
