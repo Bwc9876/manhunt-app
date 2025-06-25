@@ -11,21 +11,25 @@ function StartSelectionMenu({
     conditions: PingStartCondition;
     setStartCondition: React.Dispatch<React.SetStateAction<PingStartCondition>>;
 }) {
-    const [players, setPlayers] = useState(
-        conditions.Players !== undefined ? conditions.Players : 1
-    );
-    const [minutes, setMinutes] = useState(
-        conditions.Minutes !== undefined ? conditions.Minutes : 1
-    );
+    const players: number | undefined = Object.prototype.hasOwnProperty.call(conditions, "Players")
+        ? (conditions as { Players: number }).Players
+        : undefined;
+
+    const minutes: number | undefined = Object.prototype.hasOwnProperty.call(conditions, "Minutes")
+        ? (conditions as { Minutes: number }).Minutes
+        : undefined;
+
+    const [tempPlayers, setTempPlayers] = useState(1);
+    const [tempMinutes, setTempMinutes] = useState(1);
 
     const changeOption = (e: React.ChangeEvent<HTMLSelectElement>) => {
         switch (e.target.value) {
             case "Players":
-                setStartCondition({ Players: players });
+                setStartCondition({ Players: players !== undefined ? players : tempPlayers });
                 break;
 
             case "Minutes":
-                setStartCondition({ Minutes: minutes });
+                setStartCondition({ Minutes: minutes !== undefined ? minutes : tempMinutes });
                 break;
 
             case "Instant":
@@ -39,10 +43,10 @@ function StartSelectionMenu({
             <div className="setting-label">{label}</div>
             <div className="flex flex-row justify-between items-center-safe">
                 <select className="input-field px-5 py-2" onChange={(e) => changeOption(e)}>
-                    <option selected={conditions.Players !== undefined} value="Players">
+                    <option selected={players !== undefined} value="Players">
                         Players
                     </option>
-                    <option selected={conditions.Minutes !== undefined} value="Minutes">
+                    <option selected={minutes !== undefined} value="Minutes">
                         Minutes
                     </option>
                     <option selected={conditions === "Instant"} value="Instant">
@@ -50,23 +54,29 @@ function StartSelectionMenu({
                     </option>
                 </select>
 
-                {conditions.Players !== undefined && (
+                {players !== undefined && (
                     <input
                         type="number"
                         min="1"
                         className="input-field px-1 py-1 m-2"
                         placeholder={String(players)}
-                        onChange={(e) => setStartCondition({ Players: Number(e.target.value) })}
+                        onChange={(e) => {
+                            setTempPlayers(Number(e.target.value));
+                            setStartCondition({ Players: Number(e.target.value) });
+                        }}
                     />
                 )}
 
-                {conditions.Minutes !== undefined && (
+                {minutes !== undefined && (
                     <input
                         type="number"
                         min="1"
                         className="input-field px-1 py-1 m-2"
                         placeholder={String(minutes)}
-                        onChange={(e) => setStartCondition({ Minutes: Number(e.target.value) })}
+                        onChange={(e) => {
+                            setTempMinutes(Number(e.target.value));
+                            setStartCondition({ Minutes: Number(e.target.value) });
+                        }}
                     />
                 )}
 
