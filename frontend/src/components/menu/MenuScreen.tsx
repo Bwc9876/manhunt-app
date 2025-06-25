@@ -1,4 +1,4 @@
-import { GameSettings } from "@/bindings";
+import { commands, GameSettings, PlayerProfile } from "@/bindings";
 import React, { Dispatch, SetStateAction } from "react";
 import NavButton from "./NavButton";
 import JoinLobby from "./JoinLobby";
@@ -9,6 +9,8 @@ import {
     IoCalendarClearOutline
 } from "react-icons/io5";
 import EditProfile from "./EditProfile";
+import useSWR, { KeyedMutator } from "swr";
+import { sharedSwrConfig } from "@/lib/hooks";
 
 // Temp settings for now.
 const settings: GameSettings = {
@@ -35,7 +37,7 @@ export enum MenuState {
     History
 }
 
-export function MenuRouter({ state }: { state: MenuState }) {
+export function MenuRouter({ state, profile, setProfile }: { state: MenuState, profile: PlayerProfile, setProfile: KeyedMutator<PlayerProfile> }) {
     switch (state) {
         case MenuState.Join:
             return <JoinLobby settings={settings} />;
@@ -44,7 +46,7 @@ export function MenuRouter({ state }: { state: MenuState }) {
             return <div>Create</div>;
 
         case MenuState.Profile:
-            return <EditProfile />;
+            return <EditProfile profile={profile} setProfile={setProfile}/>;
 
         case MenuState.History:
             return <div>History</div>;
@@ -87,9 +89,16 @@ function NavBar({
 export default function MenuScreen() {
     const [state, setState] = React.useState(MenuState.Join);
 
+    const { data: profile, mutate: setProfile } = useSWR(
+        "fetch-profile",
+        commands.getProfile,
+        sharedSwrConfig
+    );
+
+
     return (
         <div className="h-screen v-screen flex flex-col items-center justify-center font-sans">
-            <MenuRouter state={state}></MenuRouter>
+            <MenuRouter state={state} profile={profile} setProfile={setProfile}></MenuRouter>
             <NavBar state={state} setState={setState}></NavBar>
         </div>
     );

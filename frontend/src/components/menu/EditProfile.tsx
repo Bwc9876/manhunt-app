@@ -1,16 +1,10 @@
 import React, { useState } from "react";
 import { sharedSwrConfig } from "@/lib/hooks";
-import useSWR from "swr";
-import { commands } from "@/bindings";
+import { commands, PlayerProfile } from "@/bindings";
+import useSWR, { KeyedMutator } from "swr";
 
-export default function EditProfile() {
-    const { data: profile, mutate: setProfile } = useSWR(
-        "fetch-profile",
-        commands.getProfile,
-        sharedSwrConfig
-    );
-
-    const [newName, setNewName] = useState(profile.display_name);
+export default function EditProfile({ profile, setProfile }: {profile: PlayerProfile, setProfile: KeyedMutator<PlayerProfile>}) {
+    const [newName, setNewName] = useState('');
 
     const onSaveProfile = async () => {
         await commands.updateProfile({ ...profile, display_name: newName });
@@ -21,6 +15,7 @@ export default function EditProfile() {
         <div className="flex flex-col items-center justify-center p-3.5">
             <input
                 className="text-center px-2 py-3 m-5 rounded-md border-2 border-gray-200"
+                placeholder={profile.display_name}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
             ></input>
