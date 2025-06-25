@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { commands, GameSettings, PingStartCondition } from "@/bindings";
 
+// I am so sorry
 function StartSelectionMenu({
     label,
     conditions,
@@ -75,6 +76,7 @@ function StartSelectionMenu({
                         min="1"
                         className="input-field px-1 py-1 m-2"
                         placeholder={"Instant"}
+                        disabled={true}
                         onChange={() => setStartCondition("Instant")}
                     />
                 )}
@@ -100,10 +102,6 @@ export default function CreateGame({
             powerup_start: powerupStartCondition
         });
     }, [pingStartCondition, powerupStartCondition]);
-
-    useEffect(() => {
-        console.log(settings);
-    }, [settings]);
 
     const onStartGame = async (code: string | null) => {
         if (code) {
