@@ -11,9 +11,10 @@ import {
 import EditProfile from "./EditProfile";
 import useSWR, { KeyedMutator } from "swr";
 import { sharedSwrConfig } from "@/lib/hooks";
+import CreateGame from "./CreateGame";
 
 // Temp settings for now.
-const settings: GameSettings = {
+const defaultSettings: GameSettings = {
     random_seed: 21341234,
     hiding_time_seconds: 10,
     ping_start: "Instant",
@@ -37,16 +38,29 @@ export enum MenuState {
     History
 }
 
-export function MenuRouter({ state, profile, setProfile }: { state: MenuState, profile: PlayerProfile, setProfile: KeyedMutator<PlayerProfile> }) {
+export function MenuRouter({
+    state,
+    profile,
+    setProfile,
+    settings,
+    setSettings
+}: {
+    state: MenuState;
+    profile: PlayerProfile;
+    setProfile: KeyedMutator<PlayerProfile>;
+    settings: GameSettings;
+    setSettings: React.Dispatch<React.SetStateAction<GameSettings>>;
+}) {
+    
     switch (state) {
         case MenuState.Join:
             return <JoinLobby settings={settings} />;
 
         case MenuState.Create:
-            return <div>Create</div>;
+            return <CreateGame settings={settings} setSettings={setSettings} />;
 
         case MenuState.Profile:
-            return <EditProfile profile={profile} setProfile={setProfile}/>;
+            return <EditProfile profile={profile} setProfile={setProfile} />;
 
         case MenuState.History:
             return <div>History</div>;
@@ -88,6 +102,7 @@ function NavBar({
 
 export default function MenuScreen() {
     const [state, setState] = React.useState(MenuState.Join);
+    const [settings, setSettings] = React.useState(defaultSettings);
 
     const { data: profile, mutate: setProfile } = useSWR(
         "fetch-profile",
@@ -95,10 +110,16 @@ export default function MenuScreen() {
         sharedSwrConfig
     );
 
-
     return (
         <div className="h-screen v-screen flex flex-col items-center justify-center font-sans">
-            <MenuRouter state={state} profile={profile} setProfile={setProfile}></MenuRouter>
+            <MenuRouter
+                state={state}
+                profile={profile}
+                setProfile={setProfile}
+                settings={settings}
+                setSettings={setSettings}
+            ></MenuRouter>
+            
             <NavBar state={state} setState={setState}></NavBar>
         </div>
     );

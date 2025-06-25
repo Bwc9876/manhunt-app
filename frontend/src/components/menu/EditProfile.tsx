@@ -1,10 +1,15 @@
 import React, { useState } from "react";
-import { sharedSwrConfig } from "@/lib/hooks";
 import { commands, PlayerProfile } from "@/bindings";
-import useSWR, { KeyedMutator } from "swr";
+import { KeyedMutator } from "swr";
 
-export default function EditProfile({ profile, setProfile }: {profile: PlayerProfile, setProfile: KeyedMutator<PlayerProfile>}) {
-    const [newName, setNewName] = useState('');
+export default function EditProfile({
+    profile,
+    setProfile
+}: {
+    profile: PlayerProfile;
+    setProfile: KeyedMutator<PlayerProfile>;
+}) {
+    const [newName, setNewName] = useState("");
 
     const onSaveProfile = async () => {
         await commands.updateProfile({ ...profile, display_name: newName });
