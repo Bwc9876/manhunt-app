@@ -110,7 +110,7 @@ export default function MenuScreen() {
     );
 
     return (
-        <div className="h-screen v-screen flex flex-col items-center justify-center font-sans">
+        <div className="screen">
             <MenuRouter
                 state={state}
                 profile={profile}

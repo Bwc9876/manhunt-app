@@ -19,14 +19,14 @@ export default function EditProfile({
     return (
         <div className="flex flex-col items-center justify-center p-3.5">
             <input
-                className="text-center px-2 py-3 m-5 rounded-md border-2 border-gray-200"
+                className="input-field px-2 py-3"
                 placeholder={profile.display_name}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
             ></input>
 
             <button
-                className="bg-blue-500 px-7 py-2 height text-white p-3.5 rounded-md"
+                className="btn-blue px-7 py-3"
                 onClick={() => {
                     onSaveProfile();
                 }}

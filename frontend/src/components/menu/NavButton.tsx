@@ -11,7 +11,7 @@ export default function NavButton({ current, setCurrent, target, children }: Nav
     if (current == target)
         return (
             <button
-                className="flex flex-col bg-transparent text-xs/6 text-center items-center align-middle text-blue-400 p-3.5 grow"
+                className="nav-btn text-blue-500"
                 onClick={() => {
                     setCurrent(target);
                 }}
@@ -22,7 +22,7 @@ export default function NavButton({ current, setCurrent, target, children }: Nav
 
     return (
         <button
-            className="flex flex-col bg-transparent text-xs/6 text-center items-center align-middle text-gray-500 p-3.5 grow"
+            className="nav-btn text-gray-500"
             onClick={() => {
                 setCurrent(target);
             }}
