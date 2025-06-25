@@ -1,95 +1,83 @@
 import React, { useEffect, useState } from "react";
 import { commands, GameSettings, PingStartCondition } from "@/bindings";
-import { start } from "repl";
 
-function PingStartOption({
-    type,
-    startCondition,
+function StartSelectionMenu({
+    label,
+    conditions,
     setStartCondition
 }: {
-    type: string,
-    startCondition: PingStartCondition;
+    label: string;
+    conditions: PingStartCondition;
     setStartCondition: React.Dispatch<React.SetStateAction<PingStartCondition>>;
 }) {
-    const [players, setPlayers] = useState(1);
-    const [minutes, setMinutes] = useState(1);
+    const [players, setPlayers] = useState(
+        conditions.Players !== undefined ? conditions.Players : 1
+    );
+    const [minutes, setMinutes] = useState(
+        conditions.Minutes !== undefined ? conditions.Minutes : 1
+    );
 
-    useEffect(() => {
-        switch (type) {
+    const changeOption = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        switch (e.target.value) {
             case "Players":
                 setStartCondition({ Players: players });
                 break;
-            
+
             case "Minutes":
                 setStartCondition({ Minutes: minutes });
                 break;
 
             case "Instant":
-                setStartCondition('Instant');
+                setStartCondition("Instant");
                 break;
         }
-    }, [type, players, minutes]);
+    };
 
-    switch (type) {
-        case "Players":
-            return <input
-                type="number"
-                min="1"
-                className="input-field px-1 py-1 m-2"
-                value={players}
-                onChange={(e) => setPlayers(Number(e.target.value))}
-            />
-            
-        case "Minutes":
-            return <input
-                type="number"
-                min="1"
-                className="input-field px-1 py-1 m-2"
-                value={minutes}
-                onChange={(e) => setMinutes(Number(e.target.value))}
-            />
-
-        case "Instant":
-            return <input disabled={true} className="input-field px-1 py-1 m-2" value="Instant" />;
-    }
-    
-    return <></>;
-}
-
-function StartSelectionMenu({
-    label,
-    startCondition,
-    setStartCondition
-}: {
-    label: string;
-    startCondition: PingStartCondition,
-    setStartCondition: React.Dispatch<React.SetStateAction<PingStartCondition>>;
-}) {
-    const [type, setType] = useState('Instant');
-    
     return (
         <div className="setting-option">
             <div className="setting-label">{label}</div>
             <div className="flex flex-row justify-between items-center-safe">
-                <select
-                    className="input-field px-5 py-2"
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                >
-                    <option selected={startCondition.Players !== undefined} value="Players">
+                <select className="input-field px-5 py-2" onChange={(e) => changeOption(e)}>
+                    <option selected={conditions.Players !== undefined} value="Players">
                         Players
                     </option>
-                    
-                    <option selected={startCondition.Minutes !== undefined} value="Minutes">
+                    <option selected={conditions.Minutes !== undefined} value="Minutes">
                         Minutes
                     </option>
-                    
-                    <option selected={startCondition === "Instant"} value="Instant">
+                    <option selected={conditions === "Instant"} value="Instant">
                         Instant
                     </option>
                 </select>
 
-                {<PingStartOption type={type} startCondition={startCondition} setStartCondition={setStartCondition} />}
+                {conditions.Players !== undefined && (
+                    <input
+                        type="number"
+                        min="1"
+                        className="input-field px-1 py-1 m-2"
+                        placeholder={String(players)}
+                        onChange={(e) => setStartCondition({ Players: Number(e.target.value) })}
+                    />
+                )}
+
+                {conditions.Minutes !== undefined && (
+                    <input
+                        type="number"
+                        min="1"
+                        className="input-field px-1 py-1 m-2"
+                        placeholder={String(minutes)}
+                        onChange={(e) => setStartCondition({ Minutes: Number(e.target.value) })}
+                    />
+                )}
+
+                {conditions === "Instant" && (
+                    <input
+                        type="number"
+                        min="1"
+                        className="input-field px-1 py-1 m-2"
+                        placeholder={"Instant"}
+                        onChange={() => setStartCondition("Instant")}
+                    />
+                )}
             </div>
         </div>
     );
@@ -112,6 +100,10 @@ export default function CreateGame({
             powerup_start: powerupStartCondition
         });
     }, [pingStartCondition, powerupStartCondition]);
+
+    useEffect(() => {
+        console.log(settings);
+    }, [settings]);
 
     const onStartGame = async (code: string | null) => {
         if (code) {
@@ -138,7 +130,7 @@ export default function CreateGame({
                     type="number"
                     min="1"
                     className="input-field px-1 py-1 m-2"
-                    placeholder={settings.random_seed}
+                    placeholder={String(settings.random_seed)}
                     onChange={(e) => {
                         setSettings({ ...settings, random_seed: Number(e.target.value) });
                     }}
@@ -151,22 +143,25 @@ export default function CreateGame({
                     type="number"
                     min="1"
                     className="input-field px-1 py-1 m-2"
-                    placeholder={settings.hiding_time_seconds}
+                    placeholder={String(settings.hiding_time_seconds)}
                     onChange={(e) => {
-                        setSettings({ ...settings, hiding_time_seconds: Number(e.target.value) });
+                        setSettings({
+                            ...settings,
+                            hiding_time_seconds: Number(e.target.value)
+                        });
                     }}
                 />
             </div>
 
             <StartSelectionMenu
                 label="Ping Start"
-                startCondition={pingStartCondition}
+                conditions={settings.ping_start}
                 setStartCondition={setPingStartCondition}
             />
 
             <StartSelectionMenu
                 label="Powerup Start"
-                startCondition={powerupStartCondition}
+                conditions={settings.powerup_start}
                 setStartCondition={setPowerupStartCondition}
             />
 
@@ -176,9 +171,12 @@ export default function CreateGame({
                     type="number"
                     min="1"
                     className="input-field px-1 py-1 m-2"
-                    placeholder={settings.ping_minutes_interval}
+                    placeholder={String(settings.ping_minutes_interval)}
                     onChange={(e) => {
-                        setSettings({ ...settings, ping_minutes_interval: Number(e.target.value) });
+                        setSettings({
+                            ...settings,
+                            ping_minutes_interval: Number(e.target.value)
+                        });
                     }}
                 ></input>
             </div>
@@ -191,7 +189,7 @@ export default function CreateGame({
                     max="100"
                     step="0.01"
                     className="input-field px-1 py-1 m-2"
-                    placeholder={settings.powerup_chance}
+                    placeholder={String(settings.powerup_chance)}
                     onChange={(e) => {
                         setSettings({ ...settings, powerup_chance: Number(e.target.value) });
                     }}
@@ -204,7 +202,7 @@ export default function CreateGame({
                     type="number"
                     min="1"
                     className="input-field px-1 py-1 m-2"
-                    placeholder={settings.powerup_minutes_cooldown}
+                    placeholder={String(settings.powerup_minutes_cooldown)}
                     onChange={(e) => {
                         setSettings({
                             ...settings,
@@ -222,7 +220,6 @@ export default function CreateGame({
             >
                 Start
             </button>
-            
         </div>
     );
 }
