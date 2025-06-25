@@ -44,7 +44,7 @@ export function MenuRouter({ state }: { state: MenuState }) {
             return <div>Create</div>;
 
         case MenuState.Profile:
-            return <EditProfile/>;
+            return <EditProfile />;
 
         case MenuState.History:
             return <div>History</div>;
@@ -60,7 +60,7 @@ function NavBar({
     setState: Dispatch<SetStateAction<MenuState>>;
 }) {
     return (
-        <div className="w-full h-1/8 flex flex-row border-t-1 border-gray-300 fixed bottom-0">
+        <div className="w-full h-1/8 flex flex-row border-t-1 justify-center border-gray-300 fixed bottom-0">
             <NavButton current={state} setCurrent={setState} target={MenuState.Join}>
                 <IoArrowForward className="size-1/3" />
                 Join

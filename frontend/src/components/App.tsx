@@ -3,7 +3,7 @@ import useSWR from "swr";
 import { AppScreen, commands } from "@/bindings";
 import { useTauriEvent, sharedSwrConfig } from "@/lib/hooks";
 import SetupScreen from "./SetupScreen";
-import MenuScreen from "./MenuScreen";
+import MenuScreen from "./menu/MenuScreen";
 import LobbyScreen from "./LobbyScreen";
 import GameScreen from "./GameScreen";
 

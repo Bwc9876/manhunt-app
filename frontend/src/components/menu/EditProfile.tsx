@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import { sharedSwrConfig } from "@/lib/hooks";
 import useSWR from "swr";
-import { commands } from '@/bindings';
+import { commands } from "@/bindings";
 
 export default function EditProfile() {
     const { data: profile, mutate: setProfile } = useSWR(
