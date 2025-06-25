@@ -51,7 +51,6 @@ export function MenuRouter({
     settings: GameSettings;
     setSettings: React.Dispatch<React.SetStateAction<GameSettings>>;
 }) {
-    
     switch (state) {
         case MenuState.Join:
             return <JoinLobby settings={settings} />;
@@ -119,7 +118,7 @@ export default function MenuScreen() {
                 settings={settings}
                 setSettings={setSettings}
             ></MenuRouter>
-            
+
             <NavBar state={state} setState={setState}></NavBar>
         </div>
     );
