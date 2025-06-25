@@ -1,69 +1,100 @@
 import React, { useEffect, useState } from "react";
-import { commands, GameSettings } from "@/bindings";
+import { commands, GameSettings, PingStartCondition } from "@/bindings";
+import { start } from "repl";
 
 function PingStartOption({
-    pingStartType,
-    settings,
-    setSettings
+    type,
+    startCondition,
+    setStartCondition
 }: {
-    pingStartType: string;
-    settings: GameSettings;
-    setSettings: React.Dispatch<React.SetStateAction<GameSettings>>;
+    type: string,
+    startCondition: PingStartCondition;
+    setStartCondition: React.Dispatch<React.SetStateAction<PingStartCondition>>;
 }) {
     const [players, setPlayers] = useState(1);
     const [minutes, setMinutes] = useState(1);
 
     useEffect(() => {
-        switch (pingStartType) {
+        switch (type) {
             case "Players":
-                setSettings({ ...settings, ping_start: { Players: players } });
+                setStartCondition({ Players: players });
                 break;
-
+            
             case "Minutes":
-                setSettings({ ...settings, ping_start: { Minutes: minutes } });
+                setStartCondition({ Minutes: minutes });
                 break;
 
             case "Instant":
-                setSettings({ ...settings, ping_start: "Instant" });
+                setStartCondition('Instant');
                 break;
         }
-    }, [pingStartType, players, minutes]);
+    }, [type, players, minutes]);
 
-    switch (pingStartType) {
+    switch (type) {
         case "Players":
-            return (
-                <input
-                    type="number"
-                    min="1"
-                    className="input-field px-1 py-1 m-2"
-                    value={players}
-                    onChange={(e) => {
-                        setPlayers(Number(e.target.value));
-                        setSettings({
-                            ...settings,
-                            ping_start: { Players: players }
-                        });
-                    }}
-                />
-            );
-
+            return <input
+                type="number"
+                min="1"
+                className="input-field px-1 py-1 m-2"
+                value={players}
+                onChange={(e) => setPlayers(Number(e.target.value))}
+            />
+            
         case "Minutes":
-            return (
-                <input
-                    type="number"
-                    min="1"
-                    className="input-field px-1 py-1 m-2"
-                    value={minutes}
-                    onChange={(e) => setMinutes(Number(e.target.value))}
-                />
-            );
+            return <input
+                type="number"
+                min="1"
+                className="input-field px-1 py-1 m-2"
+                value={minutes}
+                onChange={(e) => setMinutes(Number(e.target.value))}
+            />
 
         case "Instant":
             return <input disabled={true} className="input-field px-1 py-1 m-2" value="Instant" />;
     }
-
+    
     return <></>;
 }
+
+function StartSelectionMenu({
+    label,
+    startCondition,
+    setStartCondition
+}: {
+    label: string;
+    startCondition: PingStartCondition,
+    setStartCondition: React.Dispatch<React.SetStateAction<PingStartCondition>>;
+}) {
+    const [type, setType] = useState('Instant');
+    
+    return (
+        <div className="setting-option">
+            <div className="setting-label">{label}</div>
+            <div className="flex flex-row justify-between items-center-safe">
+                <select
+                    className="input-field px-5 py-2"
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                >
+                    <option selected={startCondition.Players !== undefined} value="Players">
+                        Players
+                    </option>
+                    
+                    <option selected={startCondition.Minutes !== undefined} value="Minutes">
+                        Minutes
+                    </option>
+                    
+                    <option selected={startCondition === "Instant"} value="Instant">
+                        Instant
+                    </option>
+                </select>
+
+                {<PingStartOption type={type} startCondition={startCondition} setStartCondition={setStartCondition} />}
+            </div>
+        </div>
+    );
+}
+
 export default function CreateGame({
     settings,
     setSettings
@@ -71,7 +102,20 @@ export default function CreateGame({
     settings: GameSettings;
     setSettings: React.Dispatch<React.SetStateAction<GameSettings>>;
 }) {
-    const [pingStartType, setPingStartType] = useState("Players");
+    const [pingStartCondition, setPingStartCondition] = useState(settings.ping_start);
+    const [powerupStartCondition, setPowerupStartCondition] = useState(settings.powerup_start);
+
+    useEffect(() => {
+        setSettings({
+            ...settings,
+            ping_start: pingStartCondition,
+            powerup_start: powerupStartCondition
+        });
+    }, [pingStartCondition, powerupStartCondition]);
+
+    useEffect(() => {
+        console.log(settings);
+    }, [settings]);
 
     const onStartGame = async (code: string | null) => {
         if (code) {
@@ -118,25 +162,17 @@ export default function CreateGame({
                 />
             </div>
 
-            <div className="setting-option">
-                <div className="setting-label">Ping Start</div>
-                <div className="flex flex-row justify-between items-center-safe">
-                    <select
-                        className="input-field px-5 py-2"
-                        onChange={(e) => setPingStartType(e.target.value)}
-                    >
-                        <option value="Players">Players</option>
-                        <option value="Minutes">Minutes</option>
-                        <option value="Instant">Instant</option>
-                    </select>
+            <StartSelectionMenu
+                label="Ping Start"
+                startCondition={pingStartCondition}
+                setStartCondition={setPingStartCondition}
+            />
 
-                    <PingStartOption
-                        pingStartType={pingStartType}
-                        settings={settings}
-                        setSettings={setSettings}
-                    />
-                </div>
-            </div>
+            <StartSelectionMenu
+                label="Powerup Start"
+                startCondition={powerupStartCondition}
+                setStartCondition={setPowerupStartCondition}
+            />
 
             <div className="setting-option">
                 <div className="setting-label">Ping Minute Interval</div>
@@ -190,7 +226,7 @@ export default function CreateGame({
             >
                 Start
             </button>
-            <></>
+            
         </div>
     );
 }
