@@ -2,9 +2,9 @@
 
 @layer components {
     .screen {
-        @apply h-screen flex flex-col items-center justify-center font-sans;
+        @apply h-screen w-screen flex flex-col font-sans;
     }
-
+    
     .btn-blue {
         @apply bg-blue-500 hover:bg-blue-600 text-white rounded-md;
     }
@@ -18,10 +18,10 @@
     }
 
     .setting-option {
-        @apply flex flex-row justify-center items-center;
+        @apply flex flex-col items-center m-2.5;
     }
 
     .setting-label {
-        @apply text-center mr-2.5;
+        @apply text-start font-medium;
     }
 }

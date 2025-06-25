@@ -17,23 +17,25 @@ export default function EditProfile({
     };
 
     return (
-        <div className="flex flex-col items-center justify-center p-3.5">
-            <input
-                className="input-field px-2 py-3"
-                placeholder={profile.display_name}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-            ></input>
+        <div className="w-full h-full flex flex-col items-center justify-center">
+            <div className="flex flex-col items-center justify-center p-3.5">
+                <input
+                    className="input-field px-2 py-3"
+                    placeholder={profile.display_name}
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                ></input>
 
-            <button
-                className="btn-blue px-7 py-3"
-                onClick={() => {
-                    onSaveProfile();
-                }}
-                disabled={newName.length === 0}
-            >
-                Save
-            </button>
+                <button
+                    className="btn-blue px-7 py-3"
+                    onClick={() => {
+                        onSaveProfile();
+                    }}
+                    disabled={newName.length === 0}
+                >
+                    Save
+                </button>
+            </div>
         </div>
     );
 }

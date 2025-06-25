@@ -75,24 +75,24 @@ function NavBar({
     setState: Dispatch<SetStateAction<MenuState>>;
 }) {
     return (
-        <div className="w-full h-1/8 flex flex-row border-t-1 justify-center border-gray-300 fixed bottom-0">
+        <div className="w-full h-1/8 flex flex-row border-t-1 justify-center items-center bg-white border-gray-300 fixed bottom-0">
             <NavButton current={state} setCurrent={setState} target={MenuState.Join}>
-                <IoArrowForward className="size-1/3" />
+                <IoArrowForward className="size-1/5" />
                 Join
             </NavButton>
 
             <NavButton current={state} setCurrent={setState} target={MenuState.Create}>
-                <IoAddOutline className="size-1/3" />
+                <IoAddOutline className="size-1/5" />
                 Create
             </NavButton>
 
             <NavButton current={state} setCurrent={setState} target={MenuState.Profile}>
-                <IoAccessibilityOutline className="size-1/3" />
+                <IoAccessibilityOutline className="size-1/5" />
                 Profile
             </NavButton>
 
             <NavButton current={state} setCurrent={setState} target={MenuState.History}>
-                <IoCalendarClearOutline className="size-1/3" />
+                <IoCalendarClearOutline className="size-1/5" />
                 History
             </NavButton>
         </div>
@@ -118,7 +118,7 @@ export default function MenuScreen() {
                 settings={settings}
                 setSettings={setSettings}
             ></MenuRouter>
-
+    
             <NavBar state={state} setState={setState}></NavBar>
         </div>
     );
