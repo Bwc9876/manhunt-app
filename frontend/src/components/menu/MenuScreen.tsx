@@ -118,7 +118,7 @@ export default function MenuScreen() {
                 settings={settings}
                 setSettings={setSettings}
             ></MenuRouter>
-    
+
             <NavBar state={state} setState={setState}></NavBar>
         </div>
     );

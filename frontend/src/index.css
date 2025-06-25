@@ -4,7 +4,7 @@
     .screen {
         @apply h-screen w-screen flex flex-col font-sans;
     }
-    
+
     .btn-blue {
         @apply bg-blue-500 hover:bg-blue-600 text-white rounded-md;
     }
