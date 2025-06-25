@@ -113,10 +113,6 @@ export default function CreateGame({
         });
     }, [pingStartCondition, powerupStartCondition]);
 
-    useEffect(() => {
-        console.log(settings);
-    }, [settings]);
-
     const onStartGame = async (code: string | null) => {
         if (code) {
             try {

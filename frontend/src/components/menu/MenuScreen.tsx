@@ -77,22 +77,22 @@ function NavBar({
     return (
         <div className="w-full h-1/8 flex flex-row border-t-1 justify-center items-center bg-white border-gray-300 fixed bottom-0">
             <NavButton current={state} setCurrent={setState} target={MenuState.Join}>
-                <IoArrowForward className="size-1/5" />
+                <IoArrowForward className="size-5" />
                 Join
             </NavButton>
 
             <NavButton current={state} setCurrent={setState} target={MenuState.Create}>
-                <IoAddOutline className="size-1/5" />
+                <IoAddOutline className="size-5" />
                 Create
             </NavButton>
 
             <NavButton current={state} setCurrent={setState} target={MenuState.Profile}>
-                <IoAccessibilityOutline className="size-1/5" />
+                <IoAccessibilityOutline className="size-5" />
                 Profile
             </NavButton>
 
             <NavButton current={state} setCurrent={setState} target={MenuState.History}>
-                <IoCalendarClearOutline className="size-1/5" />
+                <IoCalendarClearOutline className="size-5" />
                 History
             </NavButton>
         </div>
