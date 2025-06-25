@@ -8,21 +8,9 @@ interface NavButtonProps extends React.PropsWithChildren {
 }
 
 export default function NavButton({ current, setCurrent, target, children }: NavButtonProps) {
-    if (current == target)
-        return (
-            <button
-                className="nav-btn text-blue-500"
-                onClick={() => {
-                    setCurrent(target);
-                }}
-            >
-                {children}
-            </button>
-        );
-
     return (
         <button
-            className="nav-btn text-gray-500"
+            className={current == target ? "nav-btn text-blue-500" : "nav-btn text-gray-500"}
             onClick={() => {
                 setCurrent(target);
             }}
