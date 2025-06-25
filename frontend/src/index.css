@@ -1,25 +1,27 @@
 @import "tailwindcss";
 
-.screen {
-    @apply h-screen flex flex-col items-center justify-center font-sans;
-}
+@layer components {
+    .screen {
+        @apply h-screen flex flex-col items-center justify-center font-sans;
+    }
 
-.btn-blue {
-    @apply bg-blue-500 hover:bg-blue-600 text-white rounded-md;
-}
+    .btn-blue {
+        @apply bg-blue-500 hover:bg-blue-600 text-white rounded-md;
+    }
 
-.input-field {
-    @apply text-center m-5 rounded-md border-2 border-gray-200;
-}
+    .input-field {
+        @apply text-center m-5 rounded-md border-2 border-gray-200;
+    }
 
-.nav-btn {
-    @apply flex flex-col bg-transparent text-xs/6 text-center items-center align-middle p-3.5 grow;
-}
+    .nav-btn {
+        @apply flex flex-col bg-transparent text-xs/6 text-center items-center align-middle p-3.5 grow;
+    }
 
-.setting-option {
-    @apply flex flex-row justify-center items-center;
-}
+    .setting-option {
+        @apply flex flex-row justify-center items-center;
+    }
 
-.setting-label {
-    @apply text-center mr-2.5;
+    .setting-label {
+        @apply text-center mr-2.5;
+    }
 }
