@@ -1,15 +1,49 @@
-import React, { useState } from "react";
-import { GameSettings } from "@/bindings";
+import React, { useEffect, useState } from "react";
+import { commands, GameSettings } from "@/bindings";
 
-function PingStartOption({ pingStartType }: { pingStartType: string }) {
+function PingStartOption({
+    pingStartType,
+    settings,
+    setSettings
+}: {
+    pingStartType: string;
+    settings: GameSettings;
+    setSettings: React.Dispatch<React.SetStateAction<GameSettings>>;
+}) {
+    const [players, setPlayers] = useState(1);
+    const [minutes, setMinutes] = useState(1);
+
+    useEffect(() => {
+        switch (pingStartType) {
+            case "Players":
+                setSettings({ ...settings, ping_start: { Players: players } });
+                break;
+
+            case "Minutes":
+                setSettings({ ...settings, ping_start: { Minutes: minutes } });
+                break;
+
+            case "Instant":
+                setSettings({ ...settings, ping_start: "Instant" });
+                break;
+        }
+    }, [pingStartType, players, minutes]);
+
     switch (pingStartType) {
         case "Players":
             return (
                 <input
                     type="number"
                     min="1"
-                    placeholder="Enter number of players"
                     className="input-field px-1 py-1 m-2"
+                    value={players}
+                    onChange={(e) => {
+                        setPlayers(Number(e.target.value));
+                        setSettings({
+                            ...settings,
+                            ping_start: { Players: players }
+                        });
+                    }}
                 />
             );
 
@@ -18,20 +52,14 @@ function PingStartOption({ pingStartType }: { pingStartType: string }) {
                 <input
                     type="number"
                     min="1"
-                    placeholder="Enter minutes"
                     className="input-field px-1 py-1 m-2"
+                    value={minutes}
+                    onChange={(e) => setMinutes(Number(e.target.value))}
                 />
             );
 
         case "Instant":
-            return (
-                <input
-                    disabled={true}
-                    min="1"
-                    className="input-field px-1 py-1 m-2"
-                    value={"Instant"}
-                />
-            );
+            return <input disabled={true} className="input-field px-1 py-1 m-2" value="Instant" />;
     }
 
     return <></>;
@@ -45,6 +73,23 @@ export default function CreateGame({
 }) {
     const [pingStartType, setPingStartType] = useState("Players");
 
+    const onStartGame = async (code: string | null) => {
+        if (code) {
+            try {
+                const validCode = await commands.checkRoomCode(code);
+                if (!validCode) {
+                    window.alert("Invalid Join Code");
+                    return;
+                }
+            } catch (e) {
+                window.alert(`Failed to connect to Server ${e}`);
+                return;
+            }
+        }
+
+        await commands.startLobby(code, settings);
+    };
+
     return (
         <div className="flex flex-col items-center max-w-screen max-h-full overflow-y-scroll justify-start p-10 pb-50">
             <div className="setting-option">
@@ -54,6 +99,9 @@ export default function CreateGame({
                     min="1"
                     className="input-field px-1 py-1 m-2"
                     placeholder={settings.random_seed}
+                    onChange={(e) => {
+                        setSettings({ ...settings, random_seed: Number(e.target.value) });
+                    }}
                 />
             </div>
 
@@ -64,6 +112,9 @@ export default function CreateGame({
                     min="1"
                     className="input-field px-1 py-1 m-2"
                     placeholder={settings.hiding_time_seconds}
+                    onChange={(e) => {
+                        setSettings({ ...settings, hiding_time_seconds: Number(e.target.value) });
+                    }}
                 />
             </div>
 
@@ -79,7 +130,11 @@ export default function CreateGame({
                         <option value="Instant">Instant</option>
                     </select>
 
-                    <PingStartOption pingStartType={pingStartType} />
+                    <PingStartOption
+                        pingStartType={pingStartType}
+                        settings={settings}
+                        setSettings={setSettings}
+                    />
                 </div>
             </div>
 
@@ -89,7 +144,10 @@ export default function CreateGame({
                     type="number"
                     min="1"
                     className="input-field px-1 py-1 m-2"
-                    placeholder={settings.powerup_minutes_cooldown}
+                    placeholder={settings.ping_minutes_interval}
+                    onChange={(e) => {
+                        setSettings({ ...settings, ping_minutes_interval: Number(e.target.value) });
+                    }}
                 ></input>
             </div>
 
@@ -102,6 +160,9 @@ export default function CreateGame({
                     step="0.01"
                     className="input-field px-1 py-1 m-2"
                     placeholder={settings.powerup_chance}
+                    onChange={(e) => {
+                        setSettings({ ...settings, powerup_chance: Number(e.target.value) });
+                    }}
                 />
             </div>
 
@@ -112,8 +173,24 @@ export default function CreateGame({
                     min="1"
                     className="input-field px-1 py-1 m-2"
                     placeholder={settings.powerup_minutes_cooldown}
+                    onChange={(e) => {
+                        setSettings({
+                            ...settings,
+                            powerup_minutes_cooldown: Number(e.target.value)
+                        });
+                    }}
                 />
             </div>
+
+            <button
+                className="btn-blue px-7 py-3"
+                onClick={() => {
+                    onStartGame(null);
+                }}
+            >
+                Start
+            </button>
+            <></>
         </div>
     );
 }
