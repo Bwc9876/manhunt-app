@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { commands, GameSettings, PingStartCondition } from "@/bindings";
+import * as motion from "motion/react-client";
 
 // I am so sorry
 function StartSelectionMenu({
@@ -54,7 +55,7 @@ function StartSelectionMenu({
                     </option>
                 </select>
 
-                {players && (
+                {players !== undefined && (
                     <input
                         type="number"
                         min="1"
@@ -64,7 +65,7 @@ function StartSelectionMenu({
                     />
                 )}
 
-                {minutes && (
+                {minutes !== undefined && (
                     <input
                         type="number"
                         min="1"
@@ -125,7 +126,12 @@ export default function CreateGame({
     };
 
     return (
-        <div className="flex flex-col items-center max-w-screen max-h-full overflow-y-scroll justify-start p-10 pb-50">
+        <motion.div
+            className="flex flex-col items-center max-w-screen max-h-full overflow-y-scroll justify-start p-10 pb-30"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+        >
             <h1 className="text-center w-4/3 text-2xl font-semibold mb-4">Game Settings</h1>
             <div className="setting-option w-4/5">
                 <div className="setting-label">Random Seed</div>
@@ -181,7 +187,7 @@ export default function CreateGame({
                             ping_minutes_interval: Number(e.target.value)
                         });
                     }}
-                ></input>
+                />
             </div>
 
             <div className="setting-option w-4/5">
@@ -217,12 +223,10 @@ export default function CreateGame({
 
             <button
                 className="btn-blue w-1/4 m-2 py-3"
-                onClick={() => {
-                    onStartGame(null);
-                }}
+                onClick={() => onStartGame(null)}
             >
                 Start
             </button>
-        </div>
+        </motion.div>
     );
 }

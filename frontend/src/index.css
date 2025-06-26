@@ -6,7 +6,7 @@
     }
 
     .btn-blue {
-        @apply bg-blue-500 hover:bg-blue-600 text-white rounded-md;
+        @apply bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-all ease-linear;
     }
 
     .input-field {
@@ -14,7 +14,7 @@
     }
 
     .nav-btn {
-        @apply flex flex-col bg-transparent text-xs/6 text-center items-center align-middle p-3.5 grow;
+        @apply flex flex-col bg-transparent text-xs/6 text-center items-center align-middle p-3.5 grow transition-all duration-200;
     }
 
     .setting-option {
@@ -24,4 +24,22 @@
     .setting-label {
         @apply text-start font-medium;
     }
+}
+
+.fade-enter {
+    opacity: 0;
+}
+
+.fade-enter-active {
+    opacity: 1;
+    transition: opacity 300ms ease-in;
+}
+
+.fade-exit {
+    opacity: 1;
+}
+
+.fade-exit-active {
+    opacity: 0;
+    transition: opacity 300ms ease-out;
 }

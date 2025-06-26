@@ -12,6 +12,7 @@ import EditProfile from "./EditProfile";
 import useSWR, { KeyedMutator } from "swr";
 import { sharedSwrConfig } from "@/lib/hooks";
 import CreateGame from "./CreateGame";
+import { motion } from "motion/react";
 
 // Temp settings for now.
 const defaultSettings: GameSettings = {
@@ -32,10 +33,10 @@ const defaultSettings: GameSettings = {
 };
 
 export enum MenuState {
-    Join,
-    Create,
-    Profile,
-    History
+    Join = "Join",
+    Create = "Create",
+    Profile = "Profile",
+    History = "History"
 }
 
 export function MenuRouter({
@@ -62,9 +63,12 @@ export function MenuRouter({
             return <EditProfile profile={profile} setProfile={setProfile} />;
 
         case MenuState.History:
-            return <div>History</div>;
+            return (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    History
+                </motion.div>
+            );
     }
-    return <></>;
 }
 
 function NavBar({
@@ -117,8 +121,7 @@ export default function MenuScreen() {
                 setProfile={setProfile}
                 settings={settings}
                 setSettings={setSettings}
-            ></MenuRouter>
-
+            />
             <NavBar state={state} setState={setState}></NavBar>
         </div>
     );

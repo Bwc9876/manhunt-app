@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { commands, PlayerProfile } from "@/bindings";
 import { KeyedMutator } from "swr";
+import { motion } from "motion/react";
 
 export default function EditProfile({
     profile,
@@ -17,7 +18,12 @@ export default function EditProfile({
     };
 
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center">
+        <motion.div
+            className="w-full h-full flex flex-col items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+        >
             <div className="flex flex-col items-center justify-center p-3.5 w-4/5">
                 <input
                     className="input-field p-5 w-2/3 m-4.5"
@@ -36,6 +42,6 @@ export default function EditProfile({
                     Save
                 </button>
             </div>
-        </div>
+        </motion.div>
     );
 }
