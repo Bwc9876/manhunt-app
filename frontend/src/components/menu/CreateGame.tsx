@@ -19,17 +19,14 @@ function StartSelectionMenu({
         ? (conditions as { Minutes: number }).Minutes
         : undefined;
 
-    const [tempPlayers, setTempPlayers] = useState(1);
-    const [tempMinutes, setTempMinutes] = useState(1);
-
     const changeOption = (e: React.ChangeEvent<HTMLSelectElement>) => {
         switch (e.target.value) {
             case "Players":
-                setStartCondition({ Players: players !== undefined ? players : tempPlayers });
+                setStartCondition({ Players: players ? players : 4 });
                 break;
 
             case "Minutes":
-                setStartCondition({ Minutes: minutes !== undefined ? minutes : tempMinutes });
+                setStartCondition({ Minutes: minutes ? minutes : 1 });
                 break;
 
             case "Instant":
@@ -39,10 +36,13 @@ function StartSelectionMenu({
     };
 
     return (
-        <div className="setting-option">
+        <div className="setting-option w-7/8">
             <div className="setting-label">{label}</div>
-            <div className="flex flex-row justify-between items-center-safe">
-                <select className="input-field px-5 py-2" onChange={(e) => changeOption(e)}>
+            <div className="flex flex-row justify-center items-center w-4/5 m-2.5">
+                <select
+                    className="input-field p-1.5 w-2/3 mr-3.5"
+                    onChange={(e) => changeOption(e)}
+                >
                     <option selected={players !== undefined} value="Players">
                         Players
                     </option>
@@ -54,29 +54,23 @@ function StartSelectionMenu({
                     </option>
                 </select>
 
-                {players !== undefined && (
+                {players && (
                     <input
                         type="number"
                         min="1"
-                        className="input-field px-1 py-1 m-2"
+                        className="input-field p-1.5 w-2/3"
                         placeholder={String(players)}
-                        onChange={(e) => {
-                            setTempPlayers(Number(e.target.value));
-                            setStartCondition({ Players: Number(e.target.value) });
-                        }}
+                        onChange={(e) => setStartCondition({ Players: Number(e.target.value) })}
                     />
                 )}
 
-                {minutes !== undefined && (
+                {minutes && (
                     <input
                         type="number"
                         min="1"
-                        className="input-field px-1 py-1 m-2"
+                        className="input-field p-1.5 w-2/3"
                         placeholder={String(minutes)}
-                        onChange={(e) => {
-                            setTempMinutes(Number(e.target.value));
-                            setStartCondition({ Minutes: Number(e.target.value) });
-                        }}
+                        onChange={(e) => setStartCondition({ Minutes: Number(e.target.value) })}
                     />
                 )}
 
@@ -84,7 +78,7 @@ function StartSelectionMenu({
                     <input
                         type="number"
                         min="1"
-                        className="input-field px-1 py-1 m-2"
+                        className="input-field p-1.5 w-2/3"
                         placeholder={"Instant"}
                         disabled={true}
                         onChange={() => setStartCondition("Instant")}
@@ -132,12 +126,13 @@ export default function CreateGame({
 
     return (
         <div className="flex flex-col items-center max-w-screen max-h-full overflow-y-scroll justify-start p-10 pb-50">
-            <div className="setting-option">
+            <h1 className="text-center w-4/3 text-2xl font-semibold mb-4">Game Settings</h1>
+            <div className="setting-option w-4/5">
                 <div className="setting-label">Random Seed</div>
                 <input
                     type="number"
                     min="1"
-                    className="input-field px-1 py-1 m-2"
+                    className="input-field w-2/3 p-1.5 m-2"
                     placeholder={String(settings.random_seed)}
                     onChange={(e) => {
                         setSettings({ ...settings, random_seed: Number(e.target.value) });
@@ -145,12 +140,12 @@ export default function CreateGame({
                 />
             </div>
 
-            <div className="setting-option">
+            <div className="setting-option w-4/5">
                 <div className="setting-label">Hiding time</div>
                 <input
                     type="number"
                     min="1"
-                    className="input-field px-1 py-1 m-2"
+                    className="input-field w-2/3 p-1.5 m-2"
                     placeholder={String(settings.hiding_time_seconds)}
                     onChange={(e) => {
                         setSettings({
@@ -173,12 +168,12 @@ export default function CreateGame({
                 setStartCondition={setPowerupStartCondition}
             />
 
-            <div className="setting-option">
+            <div className="setting-option w-4/5">
                 <div className="setting-label">Ping Minute Interval</div>
                 <input
                     type="number"
                     min="1"
-                    className="input-field px-1 py-1 m-2"
+                    className="input-field w-2/3 p-1.5 m-2"
                     placeholder={String(settings.ping_minutes_interval)}
                     onChange={(e) => {
                         setSettings({
@@ -189,14 +184,14 @@ export default function CreateGame({
                 ></input>
             </div>
 
-            <div className="setting-option">
+            <div className="setting-option w-4/5">
                 <div className="setting-label">Powerup Chance</div>
                 <input
                     type="number"
                     min="1"
                     max="100"
                     step="0.01"
-                    className="input-field px-1 py-1 m-2"
+                    className="input-field w-2/3 p-1.5 m-2"
                     placeholder={String(settings.powerup_chance)}
                     onChange={(e) => {
                         setSettings({ ...settings, powerup_chance: Number(e.target.value) });
@@ -204,12 +199,12 @@ export default function CreateGame({
                 />
             </div>
 
-            <div className="setting-option">
+            <div className="setting-option w-4/5">
                 <div className="setting-label">Powerup Minute Cooldown</div>
                 <input
                     type="number"
                     min="1"
-                    className="input-field px-1 py-1 m-2"
+                    className="input-field w-2/3 p-1.5 m-2"
                     placeholder={String(settings.powerup_minutes_cooldown)}
                     onChange={(e) => {
                         setSettings({
@@ -221,7 +216,7 @@ export default function CreateGame({
             </div>
 
             <button
-                className="btn-blue px-7 py-3"
+                className="btn-blue w-1/4 m-2 py-3"
                 onClick={() => {
                     onStartGame(null);
                 }}

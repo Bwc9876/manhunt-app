@@ -10,7 +10,7 @@
     }
 
     .input-field {
-        @apply text-center m-5 rounded-md border-2 border-gray-200;
+        @apply text-center rounded-md border-2 border-gray-200;
     }
 
     .nav-btn {
