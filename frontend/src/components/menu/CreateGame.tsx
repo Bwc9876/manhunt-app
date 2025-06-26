@@ -202,9 +202,9 @@ export default function CreateGame({
                     step="0.01"
                     className="input-field w-2/3 p-1.5 m-2"
                     placeholder={String(settings.powerup_chance)}
-                    onChange={(e) => {
-                        setSettings({ ...settings, powerup_chance: Number(e.target.value) });
-                    }}
+                    onChange={(e) =>
+                        setSettings({ ...settings, powerup_chance: Number(e.target.value) })
+                    }
                 />
             </div>
 
@@ -215,12 +215,12 @@ export default function CreateGame({
                     min="1"
                     className="input-field w-2/3 p-1.5 m-2"
                     placeholder={String(settings.powerup_minutes_cooldown)}
-                    onChange={(e) => {
+                    onChange={(e) =>
                         setSettings({
                             ...settings,
                             powerup_minutes_cooldown: Number(e.target.value)
-                        });
-                    }}
+                        })
+                    }
                 />
             </div>
 

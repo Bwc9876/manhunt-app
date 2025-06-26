@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { commands, GameSettings } from "@/bindings";
-import { motion } from "motion/react";
+import { easeInOut, motion } from "motion/react";
 
 export default function JoinLobby({ settings }: { settings: GameSettings }) {
     const [roomCode, setRoomCode] = useState("");
@@ -25,11 +25,12 @@ export default function JoinLobby({ settings }: { settings: GameSettings }) {
     return (
         <motion.div
             className="w-full h-full flex flex-col items-center justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={{ opacity: 0, y: "-10px" }}
+            animate={{ opacity: 1, y: "0px" }}
             exit={{ opacity: 0 }}
             transition={{
-                duration: 0.25
+                ease: easeInOut,
+                duration: 0.15
             }}
         >
             <div className="flex flex-col items-center justify-center w-4/5 p-3.5">

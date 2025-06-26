@@ -14,7 +14,7 @@
     }
 
     .nav-btn {
-        @apply flex flex-col bg-transparent text-xs/6 text-center items-center align-middle p-3.5 grow transition-all duration-200;
+        @apply flex flex-col bg-transparent text-xs/6 text-center items-center align-middle p-3.5 grow transition-all duration-400;
     }
 
     .setting-option {

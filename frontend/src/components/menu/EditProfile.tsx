@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { commands, PlayerProfile } from "@/bindings";
 import { KeyedMutator } from "swr";
-import { motion } from "motion/react";
+import { easeInOut, motion } from "motion/react";
 
 export default function EditProfile({
     profile,
@@ -20,10 +20,11 @@ export default function EditProfile({
     return (
         <motion.div
             className="w-full h-full flex flex-col items-center justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={{ opacity: 0, y: "-10px" }}
+            animate={{ opacity: 1, y: "0px" }}
             exit={{ opacity: 0 }}
             transition={{
+                ease: easeInOut,
                 duration: 0.15
             }}
         >
@@ -37,9 +38,7 @@ export default function EditProfile({
 
                 <button
                     className="btn-blue px-7 py-3 w-1/2"
-                    onClick={() => {
-                        onSaveProfile();
-                    }}
+                    onClick={() => onSaveProfile()}
                     disabled={newName.length === 0}
                 >
                     Save
