@@ -131,6 +131,9 @@ export default function CreateGame({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{
+                duration: 0.15
+            }}
         >
             <h1 className="text-center w-4/3 text-2xl font-semibold mb-4">Game Settings</h1>
             <div className="setting-option w-4/5">
@@ -221,10 +224,7 @@ export default function CreateGame({
                 />
             </div>
 
-            <button
-                className="btn-blue w-1/4 m-2 py-3"
-                onClick={() => onStartGame(null)}
-            >
+            <button className="btn-blue w-1/4 m-2 py-3" onClick={() => onStartGame(null)}>
                 Start
             </button>
         </motion.div>

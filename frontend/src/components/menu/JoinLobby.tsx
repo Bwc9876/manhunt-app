@@ -28,6 +28,9 @@ export default function JoinLobby({ settings }: { settings: GameSettings }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{
+                duration: 0.25
+            }}
         >
             <div className="flex flex-col items-center justify-center w-4/5 p-3.5">
                 <input

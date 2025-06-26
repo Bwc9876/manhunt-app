@@ -23,6 +23,9 @@ export default function EditProfile({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{
+                duration: 0.15
+            }}
         >
             <div className="flex flex-col items-center justify-center p-3.5 w-4/5">
                 <input

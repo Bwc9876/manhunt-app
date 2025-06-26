@@ -12,7 +12,7 @@ import EditProfile from "./EditProfile";
 import useSWR, { KeyedMutator } from "swr";
 import { sharedSwrConfig } from "@/lib/hooks";
 import CreateGame from "./CreateGame";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 
 // Temp settings for now.
 const defaultSettings: GameSettings = {
@@ -52,23 +52,30 @@ export function MenuRouter({
     settings: GameSettings;
     setSettings: React.Dispatch<React.SetStateAction<GameSettings>>;
 }) {
-    switch (state) {
-        case MenuState.Join:
-            return <JoinLobby settings={settings} />;
+    return (
+        <AnimatePresence mode="wait">
+            {state === MenuState.Join && <JoinLobby settings={settings} key="Join" />}
+            {state === MenuState.Create && (
+                <CreateGame settings={settings} setSettings={setSettings} key="Create" />
+            )}
+            {state === MenuState.Profile && (
+                <EditProfile profile={profile} setProfile={setProfile} key="Profile" />
+            )}
 
-        case MenuState.Create:
-            return <CreateGame settings={settings} setSettings={setSettings} />;
-
-        case MenuState.Profile:
-            return <EditProfile profile={profile} setProfile={setProfile} />;
-
-        case MenuState.History:
-            return (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {state === MenuState.History && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{
+                        duration: 0.15
+                    }}
+                >
                     History
                 </motion.div>
-            );
-    }
+            )}
+        </AnimatePresence>
+    );
 }
 
 function NavBar({
