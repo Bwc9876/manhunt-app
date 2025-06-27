@@ -6,16 +6,16 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use location::TauriLocation;
-use log::{error, info, warn, LevelFilter};
+use log::{LevelFilter, error, info, warn};
 use manhunt_logic::{
     Game as BaseGame, GameSettings, GameUiState, Lobby as BaseLobby, LobbyState, PlayerProfile,
     StartGameInfo, StateUpdateSender,
 };
-use manhunt_transport::{generate_join_code, room_exists, MatchboxTransport};
+use manhunt_transport::{MatchboxTransport, generate_join_code, room_exists};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
-use tauri_specta::{collect_commands, collect_events, ErrorHandlingMode, Event};
+use tauri_specta::{ErrorHandlingMode, Event, collect_commands, collect_events};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -213,7 +213,7 @@ impl AppState {
             let mut state = state_handle.write().await;
             match res {
                 Ok(Some(start)) => {
-                    info!("Starting game as");
+                    info!("Starting Game");
                     state.start_game(app_game, start).await;
                 }
                 Ok(None) => {

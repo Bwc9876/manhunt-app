@@ -10,5 +10,6 @@ rand = { version = "0.9.1", features = ["thread_rng"] }
 rand_chacha = "0.9.0"
 serde = { version = "1.0.219", features = ["derive"] }
 specta = { version = "=2.0.0-rc.22", features = ["uuid", "chrono", "derive"] }
-tokio = { version = "1.45.1", features = ["macros", "rt", "sync", "time"] }
+tokio = { version = "1.45.1", features = ["macros", "rt", "sync", "time", "test-util"] }
+tokio-util = "0.7.15"
 uuid = { version = "1.17.0", features = ["serde", "v4"] }

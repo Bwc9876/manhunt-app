@@ -2,6 +2,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, specta::Type)]
 pub struct PlayerProfile {
-    display_name: String,
-    pfp_base64: Option<String>,
+    pub display_name: String,
+    pub pfp_base64: Option<String>,
 }

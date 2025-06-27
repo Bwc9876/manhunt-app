@@ -1,8 +1,11 @@
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{collections::HashSet, pin::Pin, sync::Arc};
 
 use anyhow::{Context, anyhow};
-use futures::FutureExt;
-use log::error;
+use futures::{
+    SinkExt, StreamExt,
+    channel::mpsc::{UnboundedReceiver, UnboundedSender},
+};
+use log::{error, info};
 use matchbox_socket::{Error as SocketError, PeerId, PeerState, WebRtcSocket};
 use tokio::{
     sync::{Mutex, mpsc},
@@ -22,11 +25,14 @@ type Queue = QueuePair<MsgPair>;
 pub struct MatchboxTransport {
     my_id: Uuid,
     incoming: Queue,
-    outgoing: Queue,
+    all_peers: Mutex<HashSet<Uuid>>,
+    msg_sender: UnboundedSender<MatchboxMsgPair>,
     cancel_token: CancellationToken,
 }
 
 type LoopFutRes = Result<(), SocketError>;
+
+type MatchboxMsgPair = (PeerId, Box<[u8]>);
 
 fn map_socket_error(err: SocketError) -> anyhow::Error {
     match err {
@@ -38,17 +44,21 @@ fn map_socket_error(err: SocketError) -> anyhow::Error {
 impl MatchboxTransport {
     pub async fn new(join_code: &str, is_host: bool) -> Result<Arc<Self>> {
         let (itx, irx) = mpsc::channel(15);
-        let (otx, orx) = mpsc::channel(15);
 
         let ws_url = server::room_url(join_code, is_host);
 
         let (mut socket, mut loop_fut) = WebRtcSocket::new_reliable(&ws_url);
 
+        let (mtx, mrx) = socket
+            .take_channel(0)
+            .expect("Failed to get channel")
+            .split();
+
         let res = loop {
             tokio::select! {
                 id = Self::wait_for_id(&mut socket) => {
                     if let Some(id) = id {
-                    break Ok(id);
+                        break Ok(id);
                     }
                 },
                 res = &mut loop_fut => {
@@ -66,22 +76,24 @@ impl MatchboxTransport {
                 let transport = Arc::new(Self {
                     my_id,
                     incoming: (itx, Mutex::new(irx)),
-                    outgoing: (otx, Mutex::new(orx)),
+                    all_peers: Mutex::new(HashSet::with_capacity(5)),
+                    msg_sender: mtx.clone(),
                     cancel_token: CancellationToken::new(),
                 });
 
                 tokio::spawn({
                     let transport = transport.clone();
                     async move {
-                        transport.main_loop(socket, loop_fut).await;
+                        transport.main_loop(socket, loop_fut, mrx).await;
                     }
                 });
 
                 Ok(transport)
             }
             Err(why) => {
+                drop(mrx);
+                mtx.close_channel();
                 drop(socket);
-                loop_fut.await.context("While disconnecting")?;
                 Err(why)
             }
         }
@@ -104,141 +116,132 @@ impl MatchboxTransport {
             .expect("Failed to push to incoming queue");
     }
 
-    async fn push_many_incoming(&self, msgs: Vec<MsgPair>) {
-        let senders = self
-            .incoming
-            .0
-            .reserve_many(msgs.len())
-            .await
-            .expect("Failed to reserve in incoming queue");
-
-        for (sender, msg) in senders.into_iter().zip(msgs.into_iter()) {
-            sender.send(msg);
-        }
-    }
-
     async fn main_loop(
         &self,
         mut socket: WebRtcSocket,
         loop_fut: Pin<Box<dyn Future<Output = LoopFutRes> + Send + 'static>>,
+        mut mrx: UnboundedReceiver<MatchboxMsgPair>,
     ) {
-        let loop_fut = async {
-            let msg = match loop_fut.await {
-                Ok(_) => TransportMessage::Disconnected,
-                Err(e) => {
-                    let msg = map_socket_error(e).to_string();
-                    TransportMessage::Error(msg)
-                }
-            };
-            self.push_incoming(None, msg).await;
-        }
-        .fuse();
-
         tokio::pin!(loop_fut);
-
-        let mut interval = tokio::time::interval(Duration::from_secs(1));
-
-        let mut outgoing_rx = self.outgoing.1.lock().await;
-        const MAX_MSG_SEND: usize = 30;
-        let mut message_buffer = Vec::with_capacity(MAX_MSG_SEND);
-
         let mut packet_handler = PacketHandler::default();
 
-        loop {
-            self.handle_peers(&mut socket).await;
+        info!("Starting transport loop");
 
-            self.handle_recv(&mut socket, &mut packet_handler).await;
-
+        let (should_await, msg) = loop {
             tokio::select! {
                 biased;
 
+                res = &mut loop_fut => {
+                    info!("Transport-initiated disconnect");
+                    break (false, match res {
+                        Ok(_) => TransportMessage::Disconnected,
+                        Err(e) => {
+                            let msg = map_socket_error(e).to_string();
+                            TransportMessage::Error(msg)
+                        }
+                    });
+                }
+
                 _ = self.cancel_token.cancelled() => {
-                    break;
+                    info!("Logic-initiated disconnect");
+                    break (true, TransportMessage::Disconnected);
                 }
 
-                _ = &mut loop_fut => {
-                    break;
+                Some((peer, state)) = socket.next() => {
+                    info!("Handling peer {peer}: {state:?}");
+                    self.handle_peer(peer, state).await;
                 }
 
-                _ = outgoing_rx.recv_many(&mut message_buffer, MAX_MSG_SEND) => {
-                    let peers = socket.connected_peers().collect::<Vec<_>>();
-                    self.handle_send(&mut socket, &peers, &mut message_buffer).await;
+                Some(data) = mrx.next() => {
+                    info!("Handling new packet from {}", data.0);
+                    self.handle_recv(data, &mut packet_handler).await;
                 }
 
-                _ = interval.tick() => {
-                    continue;
-                }
+
+            }
+        };
+
+        self.push_incoming(Some(self.my_id), msg).await;
+
+        self.msg_sender.close_channel();
+        drop(mrx);
+        socket.try_update_peers().ok();
+        drop(socket);
+        if should_await {
+            if let Err(why) = loop_fut.await {
+                error!("Failed to await after disconnect: {why:?}");
             }
         }
+        info!("Transport disconnected");
     }
 
-    async fn handle_peers(&self, socket: &mut WebRtcSocket) {
-        for (peer, state) in socket.update_peers() {
-            let msg = match state {
-                PeerState::Connected => TransportMessage::PeerConnect(peer.0),
-                PeerState::Disconnected => TransportMessage::PeerDisconnect(peer.0),
-            };
-            self.push_incoming(Some(peer.0), msg).await;
-        }
+    async fn handle_peer(&self, peer: PeerId, state: PeerState) {
+        let mut all_peers = self.all_peers.lock().await;
+        let msg = match state {
+            PeerState::Connected => {
+                all_peers.insert(peer.0);
+                TransportMessage::PeerConnect(peer.0)
+            }
+            PeerState::Disconnected => {
+                all_peers.remove(&peer.0);
+                TransportMessage::PeerDisconnect(peer.0)
+            }
+        };
+        drop(all_peers);
+        self.push_incoming(Some(peer.0), msg).await;
     }
 
-    async fn handle_send(
+    async fn handle_recv(
         &self,
-        socket: &mut WebRtcSocket,
-        all_peers: &[PeerId],
-        messages: &mut Vec<MsgPair>,
+        (PeerId(peer), packet): MatchboxMsgPair,
+        handler: &mut PacketHandler,
     ) {
-        let encoded_messages = messages.drain(..).filter_map(|(id, msg)| {
-            match PacketHandler::message_to_packets(&msg) {
-                Ok(packets) => Some((id, packets)),
-                Err(why) => {
-                    error!("Error encoding message to packets: {why:?}");
-                    None
-                }
+        match handler.consume_packet(peer, packet.into_vec()) {
+            Ok(Some(msg)) => {
+                self.push_incoming(Some(peer), msg).await;
             }
-        });
-
-        let channel = socket.channel_mut(0);
-
-        for (peer, packets) in encoded_messages {
-            if let Some(peer) = peer {
-                for packet in packets {
-                    channel.send(packet.into_boxed_slice(), PeerId(peer));
-                }
-            } else {
-                for packet in packets {
-                    let boxed = packet.into_boxed_slice();
-                    for peer in all_peers {
-                        channel.send(boxed.clone(), *peer);
-                    }
-                }
+            Ok(None) => {
+                // Non complete message
+            }
+            Err(why) => {
+                error!("Error receiving message: {why}");
             }
         }
-    }
-
-    async fn handle_recv(&self, socket: &mut WebRtcSocket, handler: &mut PacketHandler) {
-        let data = socket.channel_mut(0).receive();
-        let messages = data
-            .into_iter()
-            .filter_map(
-                |(peer, bytes)| match handler.consume_packet(peer.0, bytes.into_vec()) {
-                    Ok(msg) => msg.map(|msg| (Some(peer.0), msg)),
-                    Err(why) => {
-                        error!("Error receiving message: {why}");
-                        None
-                    }
-                },
-            )
-            .collect();
-        self.push_many_incoming(messages).await;
     }
 
     pub async fn send_transport_message(&self, peer: Option<Uuid>, msg: TransportMessage) {
-        self.outgoing
-            .0
-            .send((peer, msg))
-            .await
-            .expect("Failed to add to outgoing queue");
+        let mut tx = self.msg_sender.clone();
+
+        match PacketHandler::message_to_packets(&msg) {
+            Ok(packets) => {
+                if let Some(peer) = peer {
+                    let mut stream = futures::stream::iter(
+                        packets
+                            .into_iter()
+                            .map(|p| Ok((PeerId(peer), p.into_boxed_slice()))),
+                    );
+                    if let Err(why) = tx.send_all(&mut stream).await {
+                        error!("Error sending packet: {why}");
+                    }
+                } else {
+                    let all_peers = self.all_peers.lock().await;
+                    for peer in all_peers.iter().copied() {
+                        let packets = packets.clone();
+                        let mut stream = futures::stream::iter(
+                            packets
+                                .into_iter()
+                                .map(|p| Ok((PeerId(peer), p.into_boxed_slice()))),
+                        );
+                        if let Err(why) = tx.send_all(&mut stream).await {
+                            error!("Error sending packet: {why}");
+                        }
+                    }
+                }
+            }
+            Err(why) => {
+                error!("Error encoding message: {why}");
+            }
+        }
     }
 
     pub async fn recv_transport_messages(&self) -> Vec<MsgPair> {

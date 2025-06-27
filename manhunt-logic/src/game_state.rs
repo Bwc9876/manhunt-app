@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use rand::{
+    Rng, SeedableRng,
     distr::{Bernoulli, Distribution},
     seq::{IndexedRandom, IteratorRandom},
-    Rng, SeedableRng,
 };
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
@@ -416,8 +416,8 @@ pub struct GameHistory {
     my_id: Uuid,
     pub game_started: UtcDT,
     game_ended: UtcDT,
-    events: Vec<(UtcDT, GameEvent)>,
-    locations: Vec<(Uuid, Vec<(UtcDT, Location)>)>,
+    pub events: Vec<(UtcDT, GameEvent)>,
+    pub locations: Vec<(Uuid, Vec<(UtcDT, Location)>)>,
 }
 
 /// Subset of [GameState] that is meant to be sent to a UI frontend

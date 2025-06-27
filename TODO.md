@@ -23,8 +23,8 @@
 - [x] Transport : Handle transport cancellation better
 - [x] Backend : Add checks for when the `powerup_locations` field is an empty array in settings
 - [ ] Backend : More tests
-    - [ ] Lobby tests
-    - [ ] Game end test for actual return from loop
+    - [x] Lobby tests
+    - [x] Game end test for actual return from loop
     - [ ] Testing crate for integration testing from a DSL
     - [ ] NixOS VM tests wrapping the testing crate
 - [ ] Nix : Cheat the dependency nightmare and use crane
