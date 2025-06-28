@@ -26,7 +26,7 @@
     - [x] Lobby tests
     - [x] Game end test for actual return from loop
     - [x] More transport crate tests
-    - [ ] Signaling is wrong, only kick everyone else on host leave if the lobby is open
+    - [x] Signaling is wrong, only kick everyone else on host leave if the lobby is open
     - [x] Organize signalling and seperate out more logic
     - [x] Signaling tests
     - [ ] Testing crate for integration testing?

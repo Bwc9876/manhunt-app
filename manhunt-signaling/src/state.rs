@@ -223,7 +223,7 @@ impl ServerState {
             .unwrap_or_default();
 
         if host {
-            if let Some(mat) = matches.get_mut(&removed_peer.room) {
+            if let Some(mat) = matches.get_mut(&removed_peer.room).filter(|m| m.open_lobby) {
                 // If we're host, disconnect everyone else
                 mat.open_lobby = false;
                 mat.cancel.cancel();
@@ -458,6 +458,26 @@ mod tests {
         let matches = state.matches.lock().unwrap();
         let mat = &matches[&code.to_string()];
         assert!(mat.cancel.is_cancelled());
+        assert!(!mat.open_lobby);
+    }
+
+    #[test]
+    fn test_host_leave_with_players_but_started() {
+        let mut state = ServerState::default();
+
+        let code = "asdfasdfasdfasdf";
+
+        quick_create(&mut state, code, 1);
+        quick_join(&mut state, code, 2);
+
+        state.mark_started(&code.to_string());
+
+        let others = state.remove_peer(peer(1), true);
+
+        assert_eq!(others, Some(vec![peer(2)]));
+        let matches = state.matches.lock().unwrap();
+        let mat = &matches[&code.to_string()];
+        assert!(!mat.cancel.is_cancelled());
         assert!(!mat.open_lobby);
     }
 
