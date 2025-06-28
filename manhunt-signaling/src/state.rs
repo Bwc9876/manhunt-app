@@ -9,6 +9,7 @@ use matchbox_signaling::{
     SignalingError, SignalingState,
     common_logic::{self, StateObj},
 };
+use rand::{rngs::ThreadRng, seq::IndexedRandom};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
 
@@ -65,7 +66,38 @@ impl From<RoomError> for StatusCode {
     }
 }
 
+const ROOM_CODE_CHAR_POOL: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+const ROOM_CODE_LEN: usize = 6;
+const MAX_ROOM_TRIES: usize = 25;
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoRoomsError;
+
 impl ServerState {
+    fn random_room_code(rng: &mut ThreadRng) -> RoomId {
+        ROOM_CODE_CHAR_POOL
+            .choose_multiple(rng, ROOM_CODE_LEN)
+            .copied()
+            .map(char::from)
+            .collect()
+    }
+
+    fn check_room_taken(&self, code: &RoomId) -> bool {
+        self.matches.lock().unwrap().contains_key(code)
+    }
+
+    pub fn generate_room_code(&self) -> Result<RoomId, NoRoomsError> {
+        let mut rng = rand::rng();
+        for _ in 0..MAX_ROOM_TRIES {
+            let code = Self::random_room_code(&mut rng);
+
+            if !self.check_room_taken(&code) {
+                return Ok(code);
+            }
+        }
+        Err(NoRoomsError)
+    }
+
     fn add_client(&mut self, origin: SocketAddr, code: RoomId, host: bool) {
         self.waiting_clients
             .lock()

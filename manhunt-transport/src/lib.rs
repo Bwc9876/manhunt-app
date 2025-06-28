@@ -3,4 +3,4 @@ mod packets;
 mod server;
 
 pub use matchbox::MatchboxTransport;
-pub use server::{generate_join_code, room_exists};
+pub use server::{request_room_code, room_exists};

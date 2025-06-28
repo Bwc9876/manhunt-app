@@ -76,6 +76,7 @@
           just
           pango
           webkitgtk_4_1
+          cargo-nextest
           openssl
           pkg-config
           gobject-introspection

@@ -63,6 +63,7 @@ async fn main() -> Result {
             let state = state.clone();
             move |router| {
                 let mut state2 = state.clone();
+                let state3 = state.clone();
                 router
                     .route(
                         "/room_exists/{id}",
@@ -79,6 +80,14 @@ async fn main() -> Result {
                         post(move |Path(room_id): Path<String>| async move {
                             state2.mark_started(&room_id);
                             StatusCode::OK
+                        }),
+                    )
+                    .route(
+                        "/gen_code",
+                        get(move || async move {
+                            state3
+                                .generate_room_code()
+                                .map_err(|_| StatusCode::CONFLICT)
                         }),
                     )
             }

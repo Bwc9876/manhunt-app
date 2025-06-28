@@ -11,7 +11,7 @@ use manhunt_logic::{
     Game as BaseGame, GameSettings, GameUiState, Lobby as BaseLobby, LobbyState, PlayerProfile,
     StartGameInfo, StateUpdateSender,
 };
-use manhunt_transport::{MatchboxTransport, generate_join_code, room_exists};
+use manhunt_transport::{MatchboxTransport, request_room_code, room_exists};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -236,7 +236,17 @@ impl AppState {
     ) {
         if let AppState::Menu(profile) = self {
             let host = join_code.is_none();
-            let room_code = join_code.unwrap_or_else(generate_join_code);
+            let room_code = if let Some(code) = join_code {
+                code.to_ascii_uppercase()
+            } else {
+                match request_room_code().await {
+                    Ok(code) => code,
+                    Err(why) => {
+                        error_dialog(&app, &format!("Couldn't create a lobby\n\n{why:?}"));
+                        return;
+                    }
+                }
+            };
             let state_updates = TauriStateUpdateSender::<LobbyStateUpdate>::new(&app);
             let lobby =
                 Lobby::new(&room_code, host, profile.clone(), settings, state_updates).await;

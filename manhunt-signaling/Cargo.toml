@@ -12,6 +12,7 @@ futures = "0.3.31"
 log = "0.4.27"
 matchbox_protocol = "0.12.0"
 matchbox_signaling = "0.12.0"
+rand = { version = "0.9.1", features = ["thread_rng"] }
 tokio = { version = "1.45.1", features = ["macros"] }
 tokio-util = "0.7.15"
 uuid = "1.17.0"

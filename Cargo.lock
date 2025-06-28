@@ -2981,6 +2981,7 @@ dependencies = [
  "log",
  "matchbox_protocol",
  "matchbox_signaling",
+ "rand 0.9.1",
  "tokio",
  "tokio-util",
  "uuid",
