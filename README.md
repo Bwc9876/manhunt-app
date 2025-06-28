@@ -30,6 +30,7 @@ If you have [nix](https://nixos.org) installed, all of these are handled for you
 - [Rust](https://rustup.rs)
 - [Just](https://just.systems) (`cargo install just`)
     - **On Windows**: Some implementation of `sh` (Git for Windows works well)
+- Cargo Nextest (only needed for running `just check-rust`, `cargo install cargo-nextest`)
 - [Tauri's Pre-reqs](https://tauri.app/start/prerequisites/)
     - [(Also pre-reqs for mobile dev if you are working on the app part)](https://tauri.app/start/prerequisites/#configure-for-mobile-targets)
 - Tauri's CLI (`cargo install tauri-cli`)
@@ -59,6 +60,10 @@ You can then call the `just` recipes mentioned below within the shell.
 
 ### Project Layout
 
+- [manhunt-logic/](https://github.com/Bwc9876/manhunt-app/tree/main/manhunt-logic):
+  Game and lobby logic for the app
+- [manhunt-transport/](https://github.com/Bwc9876/manhunt-app/tree/main/manhunt-transport):
+  Transport (networking) implementation for communication between apps
 - [backend/](https://github.com/Bwc9876/manhunt-app/tree/main/backend): App
   backend, Rust side of the Tauri application
 - [frontend/](https://github.com/Bwc9876/manhunt-app/tree/main/frontend): App
@@ -74,7 +79,7 @@ As you go, please run these `just` commands every-so-often and before you commit
 
 - `just fmt`: Formats all files in the repo
 - `just check-rust`: Check (and fix) potential issues with Rust code
-  (only need to run if you edited the backend or signaling)
+  (only need to run if you edited rust code)
 - `just check-frontend`: Check for potential issues on the frontend
   (only need to run if you edited the frontend)
 

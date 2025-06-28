@@ -29,6 +29,7 @@ check-rust:
     cargo fmt --check
     cargo check
     cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
+    cargo nextest run
 
 # Run lint on the frontend
 [working-directory('frontend')]
