@@ -25,6 +25,8 @@ rustPlatform.buildRustPackage {
     chmod +w Cargo.lock
   '';
 
+  useNextest = true;
+
   meta = with lib; {
     description = "Signaling server for Manhunt app";
     mainProgram = "manhunt-signaling";

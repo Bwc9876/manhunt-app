@@ -11,6 +11,7 @@
   copyDesktopItems,
   rustPlatform,
   manhunt-frontend,
+  cargo-nextest,
 }:
 rustPlatform.buildRustPackage {
   pname = "manhunt";
@@ -52,6 +53,10 @@ rustPlatform.buildRustPackage {
     substituteInPlace backend/tauri.conf.json \
     --replace-fail '"frontendDist": "../frontend/dist"' '"frontendDist": "${manhunt-frontend}"'
   '';
+
+  useNextest = true;
+
+  cargoTestFlags = "-p manhunt-logic -p manhunt-transport -p manhunt-app";
 
   postInstall = ''
     install -DT backend/icons/128x128@2x.png $out/share/icons/hicolor/256x256@2/apps/manhunt.png
