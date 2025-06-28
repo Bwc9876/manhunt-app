@@ -25,7 +25,8 @@
 - [ ] Backend : More tests
     - [x] Lobby tests
     - [x] Game end test for actual return from loop
-    - [ ] More transport crates tests
+    - [x] More transport crate tests
+    - [ ] Signaling is wrong, only kick everyone else on host leave if the lobby is open
     - [x] Organize signalling and seperate out more logic
     - [x] Signaling tests
     - [ ] Testing crate for integration testing?
