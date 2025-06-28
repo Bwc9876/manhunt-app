@@ -25,8 +25,11 @@
 - [ ] Backend : More tests
     - [x] Lobby tests
     - [x] Game end test for actual return from loop
-    - [ ] Testing crate for integration testing from a DSL
-    - [ ] NixOS VM tests wrapping the testing crate
+    - [ ] More transport crates tests
+    - [x] Organize signalling and seperate out more logic
+    - [x] Signaling tests
+    - [ ] Testing crate for integration testing?
+    - [ ] NixOS VM tests wrapping the testing crate?
 - [ ] Nix : Cheat the dependency nightmare and use crane
 - [x] Nix : Fix manhunt.nix to actually build
 - [ ] Frontend : Rework state management, better hooks

@@ -2982,6 +2982,8 @@ dependencies = [
  "matchbox_protocol",
  "matchbox_signaling",
  "tokio",
+ "tokio-util",
+ "uuid",
 ]
 
 [[package]]
