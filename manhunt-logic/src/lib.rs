@@ -10,7 +10,7 @@ mod settings;
 mod tests;
 mod transport;
 
-pub use game::{Game, StateUpdateSender};
+pub use game::{Game, StateUpdateSender, UtcDT};
 pub use game_events::GameEvent;
 pub use game_state::{GameHistory, GameUiState};
 pub use lobby::{Lobby, LobbyMessage, LobbyState, StartGameInfo};

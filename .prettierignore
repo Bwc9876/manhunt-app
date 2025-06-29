@@ -1,7 +1,7 @@
 frontend/dist
 frontend/node_modules
 frontend/package-lock.json
-backend/gen
-backend/target
+manhunt-app/gen
+manhunt-app/target
 result
 .prettiercache

@@ -64,7 +64,7 @@ You can then call the `just` recipes mentioned below within the shell.
   Game and lobby logic for the app
 - [manhunt-transport/](https://github.com/Bwc9876/manhunt-app/tree/main/manhunt-transport):
   Transport (networking) implementation for communication between apps
-- [backend/](https://github.com/Bwc9876/manhunt-app/tree/main/backend): App
+- [manhunt-app/](https://github.com/Bwc9876/manhunt-app/tree/main/manhunt-app): App
   backend, Rust side of the Tauri application
 - [frontend/](https://github.com/Bwc9876/manhunt-app/tree/main/frontend): App
   frontend, Web side of the Tauri application
@@ -83,7 +83,7 @@ As you go, please run these `just` commands every-so-often and before you commit
 - `just check-frontend`: Check for potential issues on the frontend
   (only need to run if you edited the frontend)
 
-**Important**: When changing any type in `backend` that derives `specta::Type`,
+**Important**: When changing any type in a rust file that derives `specta::Type`,
 you need to run `just export-types` to sync these type bindings to the frontend.
 Otherwise the TypeScript definitions will not match the ones that the backend expects.
 

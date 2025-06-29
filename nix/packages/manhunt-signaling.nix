@@ -9,7 +9,7 @@ rustPlatform.buildRustPackage {
     toSource {
       root = ../../.;
       fileset = unions [
-        ../../backend
+        ../../manhunt-app
         ../../manhunt-logic
         ../../manhunt-transport
         ../../manhunt-signaling

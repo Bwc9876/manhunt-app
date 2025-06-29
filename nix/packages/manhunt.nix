@@ -11,7 +11,6 @@
   copyDesktopItems,
   rustPlatform,
   manhunt-frontend,
-  cargo-nextest,
 }:
 rustPlatform.buildRustPackage {
   pname = "manhunt";
@@ -20,7 +19,7 @@ rustPlatform.buildRustPackage {
     toSource {
       root = ../../.;
       fileset = unions [
-        ../../backend
+        ../../manhunt-app
         ../../manhunt-logic
         ../../manhunt-transport
         ../../manhunt-signaling
@@ -29,7 +28,7 @@ rustPlatform.buildRustPackage {
       ];
     };
   cargoLock.lockFile = ../../Cargo.lock;
-  buildAndTestSubdir = "backend";
+  buildAndTestSubdir = "manhunt-app";
   buildFeatures = [
     "tauri/custom-protocol"
   ];
@@ -50,7 +49,7 @@ rustPlatform.buildRustPackage {
   ];
 
   postPatch = ''
-    substituteInPlace backend/tauri.conf.json \
+    substituteInPlace manhunt-app/tauri.conf.json \
     --replace-fail '"frontendDist": "../frontend/dist"' '"frontendDist": "${manhunt-frontend}"'
   '';
 
@@ -59,9 +58,9 @@ rustPlatform.buildRustPackage {
   cargoTestFlags = "-p manhunt-logic -p manhunt-transport -p manhunt-app";
 
   postInstall = ''
-    install -DT backend/icons/128x128@2x.png $out/share/icons/hicolor/256x256@2/apps/manhunt.png
-    install -DT backend/icons/128x128.png $out/share/icons/hicolor/128x128/apps/manhunt.png
-    install -DT backend/icons/32x32.png $out/share/icons/hicolor/32x32/apps/manhunt.png
+    install -DT manhunt-app/icons/128x128@2x.png $out/share/icons/hicolor/256x256@2/apps/manhunt.png
+    install -DT manhunt-app/icons/128x128.png $out/share/icons/hicolor/128x128/apps/manhunt.png
+    install -DT manhunt-app/icons/32x32.png $out/share/icons/hicolor/32x32/apps/manhunt.png
   '';
 
   meta = with lib; {
