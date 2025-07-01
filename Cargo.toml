@@ -1,5 +1,5 @@
 [workspace]
-members = ["manhunt-app", "manhunt-logic", "manhunt-signaling", "manhunt-transport"]
+members = ["manhunt-app", "manhunt-logic", "manhunt-signaling", "manhunt-testing", "manhunt-transport"]
 resolver = "3"
 
 [profile.release]

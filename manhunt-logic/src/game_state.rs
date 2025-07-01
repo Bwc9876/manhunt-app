@@ -336,9 +336,8 @@ impl GameState {
         self.held_powerup = choice;
     }
 
-    #[cfg(test)]
-    pub fn force_set_powerup(&mut self, typ: PowerUpType) {
-        self.held_powerup = Some(typ);
+    pub fn force_set_powerup(&mut self, powerup_type: PowerUpType) {
+        self.held_powerup = Some(powerup_type);
     }
 
     pub fn peek_powerup(&self) -> Option<&PowerUpType> {

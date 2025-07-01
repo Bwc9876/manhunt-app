@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, RwLockWriteGuard};
 
 use crate::StartGameInfo;
 use crate::{prelude::*, transport::TransportMessage};
@@ -312,6 +312,10 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
         self.transport.disconnect().await;
 
         res
+    }
+
+    pub async fn lock_state(&self) -> RwLockWriteGuard<'_, GameState> {
+        self.state.write().await
     }
 }
 
