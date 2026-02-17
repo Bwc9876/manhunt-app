@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use rand::{
-    RngExt, SeedableRng, distr::{Bernoulli, Distribution}, seq::{IndexedRandom, IteratorRandom}
+    RngExt, SeedableRng,
+    distr::{Bernoulli, Distribution},
+    seq::{IndexedRandom, IteratorRandom},
 };
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
