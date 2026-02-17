@@ -13,6 +13,7 @@ rustPlatform.buildRustPackage {
         ../../manhunt-logic
         ../../manhunt-transport
         ../../manhunt-signaling
+        ../../manhunt-testing
         ../../Cargo.toml
         ../../Cargo.lock
       ];

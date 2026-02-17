@@ -483,7 +483,7 @@ mod tests {
         mat.tick().await;
 
         mat.assert_all_states(|i, s| {
-            assert!(s.game_ended(), "Game {} has not ended", i);
+            assert!(s.game_ended(), "Game {i} has not ended");
         })
         .await;
 

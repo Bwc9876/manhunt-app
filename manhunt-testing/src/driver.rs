@@ -91,15 +91,9 @@ async fn main() -> Result {
 
     let socket_name = get_socket_name(cli.socket.clone()).context("Failed to get socket name")?;
 
-    let stream = Stream::connect(socket_name)
+    let _stream = Stream::connect(socket_name)
         .await
         .context("Failed to connect to socket")?;
-
-    let mut responses = Vec::with_capacity(5);
-
-    loop {
-        
-    }
 
     Ok(())
 }

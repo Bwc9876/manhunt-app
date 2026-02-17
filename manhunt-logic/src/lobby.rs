@@ -574,13 +574,11 @@ mod tests {
             if mat.uuids[i] != id {
                 assert!(
                     !s.teams.contains_key(&id),
-                    "{} has not been removed 1 from teams",
-                    i
+                    "{i} has not been removed 1 from teams"
                 );
                 assert!(
                     !s.profiles.contains_key(&id),
-                    "{} has not been removed 1 from profiles",
-                    i
+                    "{i} has not been removed 1 from profiles"
                 );
             }
         })

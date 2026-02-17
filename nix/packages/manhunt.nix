@@ -7,7 +7,7 @@
   librsvg,
   webkitgtk_4_1,
   pkg-config,
-  wrapGAppsHook,
+  wrapGAppsHook3,
   copyDesktopItems,
   rustPlatform,
   manhunt-frontend,
@@ -23,6 +23,7 @@ rustPlatform.buildRustPackage {
         ../../manhunt-logic
         ../../manhunt-transport
         ../../manhunt-signaling
+        ../../manhunt-testing
         ../../Cargo.toml
         ../../Cargo.lock
       ];
@@ -36,7 +37,7 @@ rustPlatform.buildRustPackage {
   nativeBuildInputs = [
     pkg-config
     copyDesktopItems
-    wrapGAppsHook
+    wrapGAppsHook3
   ];
 
   buildInputs = [

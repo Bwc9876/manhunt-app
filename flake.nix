@@ -37,6 +37,7 @@
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           platformVersions = [
             "34"
+            "36"
             "latest"
           ];
           systemImageTypes = ["google_apis_playstore"];

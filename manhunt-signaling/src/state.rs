@@ -76,7 +76,7 @@ pub struct NoRoomsError;
 impl ServerState {
     fn random_room_code(rng: &mut ThreadRng) -> RoomId {
         ROOM_CODE_CHAR_POOL
-            .choose_multiple(rng, ROOM_CODE_LEN)
+            .sample(rng, ROOM_CODE_LEN)
             .copied()
             .map(char::from)
             .collect()
