@@ -9,10 +9,11 @@ rustPlatform.buildRustPackage {
     toSource {
       root = ../../.;
       fileset = unions [
-        ../../backend
+        ../../manhunt-app
         ../../manhunt-logic
         ../../manhunt-transport
         ../../manhunt-signaling
+        ../../manhunt-testing
         ../../Cargo.toml
         ../../Cargo.lock
       ];
@@ -24,6 +25,8 @@ rustPlatform.buildRustPackage {
     cp ${../../Cargo.lock} Cargo.lock
     chmod +w Cargo.lock
   '';
+
+  useNextest = true;
 
   meta = with lib; {
     description = "Signaling server for Manhunt app";

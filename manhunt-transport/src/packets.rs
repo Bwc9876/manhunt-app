@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, bail};
-use manhunt_logic::{prelude::*, TransportMessage};
+use manhunt_logic::{TransportMessage, prelude::*};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -174,8 +174,6 @@ mod tests {
         assert_eq!(data.len(), 1);
 
         let data = data.into_iter().next().unwrap();
-
-        println!("dat: {data:?}");
 
         let decoded = handler
             .consume_packet(Uuid::default(), data)

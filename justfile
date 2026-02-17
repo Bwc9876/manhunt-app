@@ -29,6 +29,7 @@ check-rust:
     cargo fmt --check
     cargo check
     cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
+    cargo nextest run
 
 # Run lint on the frontend
 [working-directory('frontend')]
@@ -36,10 +37,9 @@ check-frontend:
     npm run lint
 
 # Export types from the backend to TypeScript bindings
-[working-directory('backend')]
 export-types:
-    cargo run --bin export-types ../frontend/src/bindings.ts 
-    prettier --write ../frontend/src/bindings.ts --config ../.prettierrc.yaml
+    cargo run --bin export-types frontend/src/bindings.ts 
+    prettier --write frontend/src/bindings.ts --config .prettierrc.yaml
 
 # Start the signaling server on localhost:3536
 [working-directory('manhunt-signaling')]

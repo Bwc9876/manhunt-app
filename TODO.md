@@ -23,10 +23,14 @@
 - [x] Transport : Handle transport cancellation better
 - [x] Backend : Add checks for when the `powerup_locations` field is an empty array in settings
 - [ ] Backend : More tests
-    - [ ] Lobby tests
-    - [ ] Game end test for actual return from loop
-    - [ ] Testing crate for integration testing from a DSL
-    - [ ] NixOS VM tests wrapping the testing crate
+    - [x] Lobby tests
+    - [x] Game end test for actual return from loop
+    - [x] More transport crate tests
+    - [x] Signaling is wrong, only kick everyone else on host leave if the lobby is open
+    - [x] Organize signalling and seperate out more logic
+    - [x] Signaling tests
+    - [ ] Testing crate for integration testing?
+    - [ ] NixOS VM tests wrapping the testing crate?
 - [ ] Nix : Cheat the dependency nightmare and use crane
 - [x] Nix : Fix manhunt.nix to actually build
 - [ ] Frontend : Rework state management, better hooks

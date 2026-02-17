@@ -1,9 +1,10 @@
 use anyhow::bail;
 use chrono::{DateTime, Utc};
 use std::{sync::Arc, time::Duration};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use tokio::{sync::RwLock, time::MissedTickBehavior};
+use tokio::sync::{RwLock, RwLockWriteGuard};
 
 use crate::StartGameInfo;
 use crate::{prelude::*, transport::TransportMessage};
@@ -35,6 +36,7 @@ pub struct Game<L: LocationService, T: Transport, S: StateUpdateSender> {
     location: L,
     state_update_sender: S,
     interval: Duration,
+    cancel: CancellationToken,
 }
 
 impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
@@ -57,6 +59,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
             interval,
             state: RwLock::new(state),
             state_update_sender,
+            cancel: CancellationToken::new(),
         }
     }
 
@@ -71,8 +74,8 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
         state.remove_ping(id);
         // TODO: Maybe reroll for new powerups (specifically seeker ones) instead of just erasing it
         state.use_powerup();
-
-        self.send_event(GameEvent::PlayerCaught(state.id)).await;
+        drop(state);
+        self.send_event(GameEvent::PlayerCaught(id)).await;
     }
 
     pub async fn clone_settings(&self) -> GameSettings {
@@ -250,25 +253,35 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
         false
     }
 
-    #[cfg(test)]
-    pub async fn force_tick(&self, now: UtcDT) {
-        let mut state = self.state.write().await;
-        self.tick(&mut state, now).await;
+    pub async fn quit_game(&self) {
+        self.cancel.cancel();
     }
 
-    pub async fn quit_game(&self) {
-        self.transport.disconnect().await;
+    #[cfg(test)]
+    fn get_now() -> UtcDT {
+        let fake = tokio::time::Instant::now();
+        let real = std::time::Instant::now();
+        Utc::now() + (fake.into_std().duration_since(real) + Duration::from_secs(1))
+    }
+
+    #[cfg(not(test))]
+    fn get_now() -> UtcDT {
+        Utc::now()
     }
 
     /// Main loop of the game, handles ticking and receiving messages from [Transport].
     pub async fn main_loop(&self) -> Result<Option<GameHistory>> {
         let mut interval = tokio::time::interval(self.interval);
 
-        interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        // interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         let res = 'game: loop {
             tokio::select! {
                 biased;
+
+                _ = self.cancel.cancelled() => {
+                    break 'game Ok(None);
+                }
 
                 messages = self.transport.receive_messages() => {
                     let mut state = self.state.write().await;
@@ -286,7 +299,7 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
 
                 _ = interval.tick() => {
                     let mut state = self.state.write().await;
-                    let should_break = self.tick(&mut state, Utc::now()).await;
+                    let should_break = self.tick(&mut state, Self::get_now()).await;
 
                     if should_break {
                         let history = state.as_game_history();
@@ -299,6 +312,10 @@ impl<L: LocationService, T: Transport, S: StateUpdateSender> Game<L, T, S> {
         self.transport.disconnect().await;
 
         res
+    }
+
+    pub async fn lock_state(&self) -> RwLockWriteGuard<'_, GameState> {
+        self.state.write().await
     }
 }
 
@@ -313,21 +330,23 @@ mod tests {
     };
 
     use super::*;
-    use tokio::{task::yield_now, test};
+    use tokio::{sync::oneshot, task::yield_now, test};
 
     type TestGame = Game<MockLocation, MockTransport, DummySender>;
 
+    type EndRecv = oneshot::Receiver<Result<Option<GameHistory>>>;
+
     struct MockMatch {
         uuids: Vec<Uuid>,
-        games: HashMap<u32, Arc<TestGame>>,
+        games: Vec<Arc<TestGame>>,
         settings: GameSettings,
-        mock_now: UtcDT,
     }
 
-    const INTERVAL: Duration = Duration::from_secs(u64::MAX);
+    const INTERVAL: Duration = Duration::from_secs(600000);
 
     impl MockMatch {
         pub fn new(settings: GameSettings, players: u32, seekers: u32) -> Self {
+            tokio::time::pause();
             let (uuids, transports) = MockTransport::create_mesh(players);
 
             let initial_caught_state = (0..players)
@@ -336,8 +355,7 @@ mod tests {
 
             let games = transports
                 .into_iter()
-                .enumerate()
-                .map(|(id, transport)| {
+                .map(|transport| {
                     let location = MockLocation;
                     let start_info = StartGameInfo {
                         initial_caught_state: initial_caught_state.clone(),
@@ -351,63 +369,71 @@ mod tests {
                         DummySender,
                     );
 
-                    (id as u32, Arc::new(game))
+                    Arc::new(game)
                 })
-                .collect::<HashMap<_, _>>();
+                .collect();
 
             Self {
                 settings,
                 games,
                 uuids,
-                mock_now: Utc::now(),
             }
         }
 
-        pub async fn start(&self) {
-            for game in self.games.values() {
+        pub async fn start(&self) -> Vec<EndRecv> {
+            let mut recvs = Vec::with_capacity(self.games.len());
+            for game in self.games.iter() {
                 let game = game.clone();
+                let (send, recv) = oneshot::channel();
+                recvs.push(recv);
                 tokio::spawn(async move {
-                    game.main_loop().await.expect("Game Start Fail");
+                    let res = game.main_loop().await;
+                    send.send(res).expect("Failed to send");
                 });
                 yield_now().await;
             }
+            recvs
         }
 
-        pub async fn pass_time(&mut self, d: Duration) {
-            self.mock_now += d;
-        }
-
-        pub async fn assert_all_states(&self, f: impl Fn(&GameState)) {
-            for game in self.games.values() {
+        pub async fn assert_all_states(&self, f: impl Fn(usize, &GameState)) {
+            for (i, game) in self.games.iter().enumerate() {
                 let state = game.state.read().await;
-                f(&state);
+                f(i, &state);
             }
         }
 
-        pub fn game(&self, id: u32) -> &TestGame {
-            self.games.get(&id).as_ref().unwrap()
+        pub fn assert_all_transports_disconnected(&self) {
+            for game in self.games.iter() {
+                assert!(
+                    game.transport.is_disconnected(),
+                    "Game {} is still connected",
+                    game.transport.self_id()
+                );
+            }
         }
 
         pub async fn wait_for_seekers(&mut self) {
             let hiding_time = Duration::from_secs(self.settings.hiding_time_seconds as u64 + 1);
-            self.mock_now += hiding_time;
+
+            tokio::time::sleep(hiding_time).await;
 
             self.tick().await;
 
-            self.assert_all_states(|s| {
-                assert!(s.seekers_released());
+            self.assert_all_states(|i, s| {
+                assert!(s.seekers_released(), "Seekers not released on game {i}");
             })
             .await;
         }
 
-        async fn tick_all(&self, now: UtcDT) {
-            for game in self.games.values() {
-                game.force_tick(now).await;
+        pub async fn wait_for_transports(&self) {
+            for game in self.games.iter() {
+                game.transport.wait_for_queue_empty().await;
             }
         }
 
         pub async fn tick(&self) {
-            self.tick_all(self.mock_now).await;
+            tokio::time::sleep(INTERVAL + Duration::from_secs(1)).await;
+            self.wait_for_transports().await;
             yield_now().await;
         }
     }
@@ -436,29 +462,51 @@ mod tests {
         // 2 players, one is a seeker
         let mut mat = MockMatch::new(settings, 2, 1);
 
-        mat.start().await;
+        let recvs = mat.start().await;
 
         mat.wait_for_seekers().await;
 
-        mat.game(1).mark_caught().await;
+        mat.games[1].mark_caught().await;
 
-        mat.tick().await;
+        mat.wait_for_transports().await;
 
-        mat.assert_all_states(|s| {
+        mat.assert_all_states(|i, s| {
             assert_eq!(
                 s.get_caught(mat.uuids[1]),
                 Some(true),
-                "Game {} sees player 1 as not caught",
-                s.id
+                "Game {i} sees player 1 as not caught",
             );
         })
         .await;
 
-        // Extra tick for post-game syncing
+        // Tick to process game end
         mat.tick().await;
 
-        mat.assert_all_states(|s| assert!(s.game_ended(), "Game {} has not ended", s.id))
-            .await;
+        mat.assert_all_states(|i, s| {
+            assert!(s.game_ended(), "Game {i} has not ended");
+        })
+        .await;
+
+        // Tick for post-game sync
+        mat.tick().await;
+
+        mat.assert_all_transports_disconnected();
+
+        for (i, recv) in recvs.into_iter().enumerate() {
+            let res = recv.await.expect("Failed to recv");
+            match res {
+                Ok(Some(hist)) => {
+                    assert!(!hist.locations.is_empty(), "Game {i} has no locations");
+                    assert!(!hist.events.is_empty(), "Game {i} has no event");
+                }
+                Ok(None) => {
+                    panic!("Game {i} exited without a history (did not end via post game sync)");
+                }
+                Err(why) => {
+                    panic!("Game {i} encountered error: {why:?}");
+                }
+            }
+        }
     }
 
     #[test]
@@ -472,47 +520,40 @@ mod tests {
 
         mat.wait_for_seekers().await;
 
-        mat.assert_all_states(|s| {
+        mat.assert_all_states(|i, s| {
             for id in 0..4 {
                 let ping = s.get_ping(mat.uuids[id]);
                 if id == 0 {
                     assert!(
                         ping.is_none(),
-                        "Game 0 is a seeker and shouldn't be pinged (in {})",
-                        s.id
+                        "Game {i} has a ping for 0, despite them being a seeker",
                     );
                 } else {
                     assert!(
                         ping.is_some(),
-                        "Game {} is a hider and should be pinged (in {})",
-                        id,
-                        s.id
+                        "Game {i} doesn't have a ping for {id}, despite them being a hider",
                     );
                 }
             }
         })
         .await;
 
-        mat.game(1).mark_caught().await;
+        mat.games[1].mark_caught().await;
 
         mat.tick().await;
 
-        mat.assert_all_states(|s| {
+        mat.assert_all_states(|i, s| {
             for id in 0..4 {
                 let ping = s.get_ping(mat.uuids[id]);
                 if id <= 1 {
                     assert!(
                         ping.is_none(),
-                        "Game {} is a seeker and shouldn't be pinged (in {})",
-                        id,
-                        s.id
+                        "Game {i} has a ping for {id}, despite them being a seeker",
                     );
                 } else {
                     assert!(
                         ping.is_some(),
-                        "Game {} is a hider and should be pinged (in {})",
-                        id,
-                        s.id
+                        "Game {i} doesn't have a ping for {id}, despite them being a hider",
                     );
                 }
             }
@@ -539,21 +580,20 @@ mod tests {
         mat.start().await;
         mat.tick().await;
         mat.wait_for_seekers().await;
-        mat.pass_time(Duration::from_secs(60)).await;
+        tokio::time::sleep(Duration::from_secs(60)).await;
         mat.tick().await;
 
-        let game = mat.game(0);
+        let game = mat.games[0].clone();
         let state = game.state.read().await;
         let location = state.powerup_location().expect("Powerup didn't spawn");
 
         drop(state);
 
-        mat.assert_all_states(|s| {
+        mat.assert_all_states(|i, s| {
             assert_eq!(
                 s.powerup_location(),
                 Some(location),
-                "Game {} has a different location than 0",
-                s.id
+                "Game {i} has a different location than 0",
             );
         })
         .await;
@@ -562,28 +602,31 @@ mod tests {
     #[test]
     async fn test_powerup_ping_seeker_as_you() {
         let mut settings = mk_settings();
-        settings.ping_minutes_interval = 0;
+        settings.ping_minutes_interval = 1;
         let mut mat = MockMatch::new(settings, 2, 1);
 
         mat.start().await;
         mat.wait_for_seekers().await;
 
-        let game = mat.game(1);
+        mat.tick().await;
+
+        tokio::time::sleep(Duration::from_secs(60)).await;
+
+        let game = mat.games[1].clone();
         let mut state = game.state.write().await;
         state.force_set_powerup(PowerUpType::PingSeeker);
         drop(state);
 
         mat.tick().await;
 
-        mat.assert_all_states(|s| {
+        mat.assert_all_states(|i, s| {
             if let Some(ping) = s.get_ping(mat.uuids[1]) {
                 assert_eq!(
                     ping.real_player, mat.uuids[0],
-                    "Ping for 1 is not truly 0 (in {})",
-                    s.id
+                    "Game {i} has a ping for 1, but it wasn't from 0"
                 );
             } else {
-                panic!("No ping for 1 (in {})", s.id);
+                panic!("Game {i} has no ping for 1");
             }
         })
         .await;
@@ -591,14 +634,15 @@ mod tests {
 
     #[test]
     async fn test_powerup_ping_random_hider() {
-        let settings = mk_settings();
+        let mut settings = mk_settings();
+        settings.ping_minutes_interval = u32::MAX;
 
         let mut mat = MockMatch::new(settings, 3, 1);
 
         mat.start().await;
         mat.wait_for_seekers().await;
 
-        let game = mat.game(1);
+        let game = mat.games[1].clone();
         let mut state = game.state.write().await;
         state.force_set_powerup(PowerUpType::ForcePingOther);
         drop(state);
@@ -606,12 +650,21 @@ mod tests {
         game.use_powerup().await;
         mat.tick().await;
 
-        mat.assert_all_states(|s| {
-            // Player 0 is a seeker, player 1 user the powerup, so 2 is the only one that should
-            // could have pinged
-            assert!(s.get_ping(mat.uuids[2]).is_some());
-            assert!(s.get_ping(mat.uuids[0]).is_none());
-            assert!(s.get_ping(mat.uuids[1]).is_none());
+        mat.assert_all_states(|i, s| {
+            // Player 0 is a seeker, player 1 used the powerup, so 2 is the only one that should
+            // have pinged
+            assert!(
+                s.get_ping(mat.uuids[2]).is_some(),
+                "Ping 2 is not present in game {i}"
+            );
+            assert!(
+                s.get_ping(mat.uuids[0]).is_none(),
+                "Ping 0 is present in game {i}"
+            );
+            assert!(
+                s.get_ping(mat.uuids[1]).is_none(),
+                "Ping 1 is present in game {i}"
+            );
         })
         .await;
     }
@@ -624,21 +677,24 @@ mod tests {
 
         mat.start().await;
 
-        let game = mat.game(3);
+        mat.tick().await;
+
+        let game = mat.games[3].clone();
         let mut state = game.state.write().await;
         state.force_set_powerup(PowerUpType::PingAllSeekers);
         drop(state);
 
         game.use_powerup().await;
+        // One tick to send out the ForcePing
+        mat.tick().await;
+        // One tick to for the seekers to reply
         mat.tick().await;
 
-        mat.assert_all_states(|s| {
+        mat.assert_all_states(|i, s| {
             for id in 0..3 {
                 assert!(
-                    s.get_caught(mat.uuids[id]).is_some(),
-                    "Player {} should be pinged due to the powerup (in {})",
-                    id,
-                    s.id
+                    &s.get_ping(mat.uuids[id]).is_some(),
+                    "Game {i} does not have a ping for {id}, despite the powerup being active",
                 );
             }
         })
@@ -650,25 +706,30 @@ mod tests {
         let settings = mk_settings();
         let mat = MockMatch::new(settings, 4, 1);
 
-        mat.start().await;
+        let mut recvs = mat.start().await;
 
-        let game = mat.game(2);
-        game.quit_game().await;
+        let game = mat.games[2].clone();
         let id = game.state.read().await.id;
+
+        game.quit_game().await;
+        let res = recvs.swap_remove(2).await.expect("Failed to recv");
+        assert!(res.is_ok_and(|o| o.is_none()), "2 did not exit cleanly");
+        assert!(
+            game.transport.is_disconnected(),
+            "2's transport is not disconnected"
+        );
 
         mat.tick().await;
 
-        mat.assert_all_states(|s| {
+        mat.assert_all_states(|i, s| {
             if s.id != id {
                 assert!(
                     s.get_ping(id).is_none(),
-                    "Game {} has not removed 2 from pings",
-                    s.id
+                    "Game {i} has not removed 2 from pings",
                 );
                 assert!(
                     s.get_caught(id).is_none(),
-                    "Game {} has not removed 2 from caught state",
-                    s.id
+                    "Game {i} has not removed 2 from caught state",
                 );
             }
         })

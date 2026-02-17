@@ -7,7 +7,7 @@
   librsvg,
   webkitgtk_4_1,
   pkg-config,
-  wrapGAppsHook,
+  wrapGAppsHook3,
   copyDesktopItems,
   rustPlatform,
   manhunt-frontend,
@@ -19,16 +19,17 @@ rustPlatform.buildRustPackage {
     toSource {
       root = ../../.;
       fileset = unions [
-        ../../backend
+        ../../manhunt-app
         ../../manhunt-logic
         ../../manhunt-transport
         ../../manhunt-signaling
+        ../../manhunt-testing
         ../../Cargo.toml
         ../../Cargo.lock
       ];
     };
   cargoLock.lockFile = ../../Cargo.lock;
-  buildAndTestSubdir = "backend";
+  buildAndTestSubdir = "manhunt-app";
   buildFeatures = [
     "tauri/custom-protocol"
   ];
@@ -36,7 +37,7 @@ rustPlatform.buildRustPackage {
   nativeBuildInputs = [
     pkg-config
     copyDesktopItems
-    wrapGAppsHook
+    wrapGAppsHook3
   ];
 
   buildInputs = [
@@ -49,14 +50,18 @@ rustPlatform.buildRustPackage {
   ];
 
   postPatch = ''
-    substituteInPlace backend/tauri.conf.json \
+    substituteInPlace manhunt-app/tauri.conf.json \
     --replace-fail '"frontendDist": "../frontend/dist"' '"frontendDist": "${manhunt-frontend}"'
   '';
 
+  useNextest = true;
+
+  cargoTestFlags = "-p manhunt-logic -p manhunt-transport -p manhunt-app";
+
   postInstall = ''
-    install -DT backend/icons/128x128@2x.png $out/share/icons/hicolor/256x256@2/apps/manhunt.png
-    install -DT backend/icons/128x128.png $out/share/icons/hicolor/128x128/apps/manhunt.png
-    install -DT backend/icons/32x32.png $out/share/icons/hicolor/32x32/apps/manhunt.png
+    install -DT manhunt-app/icons/128x128@2x.png $out/share/icons/hicolor/256x256@2/apps/manhunt.png
+    install -DT manhunt-app/icons/128x128.png $out/share/icons/hicolor/128x128/apps/manhunt.png
+    install -DT manhunt-app/icons/32x32.png $out/share/icons/hicolor/32x32/apps/manhunt.png
   '';
 
   meta = with lib; {

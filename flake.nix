@@ -18,7 +18,7 @@
       formatters = pkgs: let
         prettier = "${pkgs.prettier}/bin/prettier --write .";
         alejandra = "${pkgs.alejandra}/bin/alejandra .";
-        rustfmt = "${pkgs.rustfmt}/bin/rustfmt";
+        rustfmt = "${pkgs.rustfmt}/bin/rustfmt fmt";
         just = "${pkgs.just}/bin/just --fmt --unstable";
       in {
         "justfile" = just;
@@ -37,6 +37,7 @@
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           platformVersions = [
             "34"
+            "36"
             "latest"
           ];
           systemImageTypes = ["google_apis_playstore"];
@@ -76,6 +77,7 @@
           just
           pango
           webkitgtk_4_1
+          cargo-nextest
           openssl
           pkg-config
           gobject-introspection

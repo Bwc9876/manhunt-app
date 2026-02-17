@@ -66,13 +66,19 @@ pub async fn mark_room_started(code: &str) -> Result {
         .await
         .context("Could not send request")?
         .error_for_status()
-        .context("Server returned error")?;
+        .context("Server returned an error")?;
     Ok(())
 }
 
-pub fn generate_join_code() -> String {
-    // 5 character sequence of A-Z
-    (0..5)
-        .map(|_| (b'A' + rand::random_range(0..26)) as char)
-        .collect::<String>()
+const SERVER_GEN_CODE_URL: &str = const_str::concat!(SERVER_HTTP_URL, "/gen_code");
+
+pub async fn request_room_code() -> Result<String> {
+    reqwest::get(SERVER_GEN_CODE_URL)
+        .await
+        .context("Failed to contact signaling server")?
+        .error_for_status()
+        .context("Server returned an error")?
+        .text()
+        .await
+        .context("Failed to decode response")
 }

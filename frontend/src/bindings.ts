@@ -156,6 +156,7 @@ export const events = __makeEvents__<{
 export type AppGameHistory = {
     history: GameHistory;
     profiles: Partial<{ [key in string]: PlayerProfile }>;
+    settings: GameSettings;
 };
 export type AppScreen = "Setup" | "Menu" | "Lobby" | "Game" | "Replay";
 /**

@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use rand::{
-    distr::{Bernoulli, Distribution},
-    seq::{IndexedRandom, IteratorRandom},
-    Rng, SeedableRng,
+    RngExt, SeedableRng, distr::{Bernoulli, Distribution}, seq::{IndexedRandom, IteratorRandom}
 };
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
@@ -336,9 +334,8 @@ impl GameState {
         self.held_powerup = choice;
     }
 
-    #[cfg(test)]
-    pub fn force_set_powerup(&mut self, typ: PowerUpType) {
-        self.held_powerup = Some(typ);
+    pub fn force_set_powerup(&mut self, powerup_type: PowerUpType) {
+        self.held_powerup = Some(powerup_type);
     }
 
     pub fn peek_powerup(&self) -> Option<&PowerUpType> {
@@ -416,8 +413,8 @@ pub struct GameHistory {
     my_id: Uuid,
     pub game_started: UtcDT,
     game_ended: UtcDT,
-    events: Vec<(UtcDT, GameEvent)>,
-    locations: Vec<(Uuid, Vec<(UtcDT, Location)>)>,
+    pub events: Vec<(UtcDT, GameEvent)>,
+    pub locations: Vec<(Uuid, Vec<(UtcDT, Location)>)>,
 }
 
 /// Subset of [GameState] that is meant to be sent to a UI frontend

@@ -5,7 +5,7 @@ use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::{Store, StoreExt};
 use uuid::Uuid;
 
-use manhunt_logic::{GameHistory, PlayerProfile};
+use manhunt_logic::{GameHistory, GameSettings, PlayerProfile};
 
 use crate::UtcDT;
 
@@ -15,11 +15,20 @@ type Result<T = (), E = anyhow::Error> = StdResult<T, E>;
 pub struct AppGameHistory {
     history: GameHistory,
     profiles: HashMap<Uuid, PlayerProfile>,
+    settings: GameSettings,
 }
 
 impl AppGameHistory {
-    pub fn new(history: GameHistory, profiles: HashMap<Uuid, PlayerProfile>) -> Self {
-        Self { history, profiles }
+    pub fn new(
+        history: GameHistory,
+        profiles: HashMap<Uuid, PlayerProfile>,
+        settings: GameSettings,
+    ) -> Self {
+        Self {
+            history,
+            profiles,
+            settings,
+        }
     }
 
     fn get_store<R: Runtime>(app: &AppHandle<R>) -> Result<Arc<Store<R>>> {
